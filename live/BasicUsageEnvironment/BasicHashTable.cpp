@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -13,7 +13,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
-// Copyright (c) 1996-2012 Live Networks, Inc.  All rights reserved.
+// Copyright (c) 1996-2017 Live Networks, Inc.  All rights reserved.
 // Basic Hash Table implementation
 // Implementation
 
@@ -95,7 +95,7 @@ unsigned BasicHashTable::numEntries() const {
   return fNumEntries;
 }
 
-BasicHashTable::Iterator::Iterator(BasicHashTable& table)
+BasicHashTable::Iterator::Iterator(BasicHashTable const& table)
   : fTable(table), fNextIndex(0), fNextEntry(NULL) {
 }
 
@@ -119,9 +119,9 @@ HashTable* HashTable::create(int keyType) {
   return new BasicHashTable(keyType);
 }
 
-HashTable::Iterator* HashTable::Iterator::create(HashTable& hashTable) {
+HashTable::Iterator* HashTable::Iterator::create(HashTable const& hashTable) {
   // "hashTable" is assumed to be a BasicHashTable
-  return new BasicHashTable::Iterator((BasicHashTable&)hashTable);
+  return new BasicHashTable::Iterator((BasicHashTable const&)hashTable);
 }
 
 ////////// Implementation of internal member functions //////////

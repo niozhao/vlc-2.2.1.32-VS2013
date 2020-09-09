@@ -12,7 +12,8 @@
  * This confuses C++.  To overcome this, we use our own routine, implemented in C.
  */
 
-unsigned our_inet_addr(char const* cp)
+unsigned our_inet_addr(cp)
+	char const* cp;
 {
 	return inet_addr(cp);
 }
@@ -264,10 +265,10 @@ our_srandom(unsigned int x)
  * Returns a pointer to the old state.
  */
 char *
-our_initstate(unsigned int seed, char *arg_state, int n)
-			/* seed for R.N.G. */
-			/* pointer to state array */
-			/* # bytes of state info */
+our_initstate(seed, arg_state, n)
+	unsigned int seed;		/* seed for R.N.G. */
+	char *arg_state;		/* pointer to state array */
+	int n;				/* # bytes of state info */
 {
 	register char *ostate = (char *)(&state[-1]);
 
@@ -329,7 +330,8 @@ our_initstate(unsigned int seed, char *arg_state, int n)
  * Returns a pointer to the old state information.
  */
 char *
-our_setstate(char *arg_state)
+our_setstate(arg_state)
+	char *arg_state;
 {
 	register long *new_state = (long *)arg_state;
 	register int type = new_state[0] % MAX_TYPES;

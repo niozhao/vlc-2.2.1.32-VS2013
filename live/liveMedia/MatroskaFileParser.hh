@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -14,7 +14,7 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
 // "liveMedia"
-// Copyright (c) 1996-2012 Live Networks, Inc.  All rights reserved.
+// Copyright (c) 1996-2017 Live Networks, Inc.  All rights reserved.
 // A parser for a Matroska file.
 // C++ header
 
@@ -68,7 +68,7 @@ private:
 
   void lookForNextBlock();
   void parseBlock();
-  void deliverFrameWithinBlock();
+  Boolean deliverFrameWithinBlock();
   void deliverFrameBytes();
 
   void getCommonFrameBytes(MatroskaTrack* track, u_int8_t* to, unsigned numBytesToGet, unsigned numBytesToSkip);
@@ -83,6 +83,7 @@ private:
   Boolean parseEBMLVal_binary(EBMLDataSize& size, u_int8_t*& result);
     // Note: "result" is dynamically allocated; the caller must delete[] it later
   void skipHeader(EBMLDataSize const& size);
+  void skipRemainingHeaderBytes(Boolean isContinuation);
 
   void setParseState();
 
@@ -102,6 +103,9 @@ private:
   MatroskaDemux* fOurDemux;
   MatroskaParseState fCurrentParseState;
   u_int64_t fCurOffsetInFile, fSavedCurOffsetInFile, fLimitOffsetInFile;
+
+  // For skipping over (possibly large) headers:
+  u_int64_t fNumHeaderBytesToSkip;
 
   // For parsing 'Seek ID's:
   EBMLId fLastSeekId;

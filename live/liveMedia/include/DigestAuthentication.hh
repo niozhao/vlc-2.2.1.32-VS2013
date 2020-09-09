@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -14,7 +14,7 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
 // "liveMedia"
-// Copyright (c) 1996-2012 Live Networks, Inc.  All rights reserved.
+// Copyright (c) 1996-2017 Live Networks, Inc.  All rights reserved.
 // A class used for digest authentication.
 // C++ header
 
@@ -37,6 +37,7 @@ public:
       // by md5(<username>:<realm>:<actual-password>)
   Authenticator(const Authenticator& orig);
   Authenticator& operator=(const Authenticator& rightSide);
+  Boolean operator<(const Authenticator* rightSide);
   virtual ~Authenticator();
 
   void reset();
@@ -54,6 +55,7 @@ public:
   char const* password() const { return fPassword; }
 
   char const* computeDigestResponse(char const* cmd, char const* url) const;
+      // The returned string from this function must later be freed by calling:
   void reclaimDigestResponse(char const* responseStr) const;
 
 private:

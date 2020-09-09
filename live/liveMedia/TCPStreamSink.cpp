@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -14,11 +14,12 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
 // "liveMedia"
-// Copyright (c) 1996-2012 Live Networks, Inc.  All rights reserved.
+// Copyright (c) 1996-2017 Live Networks, Inc.  All rights reserved.
 // A sink representing a TCP output stream
 // Implementation
 
 #include "TCPStreamSink.hh"
+#include <GroupsockHelper.hh> // for "ignoreSigPipeOnSocket()"
 
 TCPStreamSink* TCPStreamSink::createNew(UsageEnvironment& env, int socketNum) {
   return new TCPStreamSink(env, socketNum);
@@ -29,9 +30,12 @@ TCPStreamSink::TCPStreamSink(UsageEnvironment& env, int socketNum)
     fUnwrittenBytesStart(0), fUnwrittenBytesEnd(0),
     fInputSourceIsOpen(False), fOutputSocketIsWritable(True),
     fOutputSocketNum(socketNum) {
+  ignoreSigPipeOnSocket(socketNum);
 }
 
 TCPStreamSink::~TCPStreamSink() {
+  // Turn off any pending background handling of our output socket:
+  envir().taskScheduler().disableBackgroundHandling(fOutputSocketNum);
 }
 
 Boolean TCPStreamSink::continuePlaying() {
@@ -51,7 +55,9 @@ void TCPStreamSink::processBuffer() {
     if (numBytesWritten < (int)numUnwrittenBytes()) {
       // The output socket is no longer writable.  Set a handler to be called when it becomes writable again.
       fOutputSocketIsWritable = False;
-      envir().taskScheduler().setBackgroundHandling(fOutputSocketNum, SOCKET_WRITABLE, socketWritableHandler, this);
+      if (envir().getErrno() != EPIPE) { // on this error, the socket might still be writable, but no longer usable
+	envir().taskScheduler().setBackgroundHandling(fOutputSocketNum, SOCKET_WRITABLE, socketWritableHandler, this);
+      }
     }
     if (numBytesWritten > 0) {
       // We wrote at least some of our data.  Update our buffer pointers:
@@ -66,11 +72,9 @@ void TCPStreamSink::processBuffer() {
   // Then, read from our input source, if we can (& we're not already reading from it):
   if (fInputSourceIsOpen && freeBufferSpace() >= TCP_STREAM_SINK_MIN_READ_SIZE && !fSource->isCurrentlyAwaitingData()) {
     fSource->getNextFrame(&fBuffer[fUnwrittenBytesEnd], freeBufferSpace(), afterGettingFrame, this, ourOnSourceClosure, this);
-  }
-
-  if (!fInputSourceIsOpen && numUnwrittenBytes() == 0) {
+  } else if (!fInputSourceIsOpen && numUnwrittenBytes() == 0) {
     // We're now done:
-    onSourceClosure(this);
+    onSourceClosure();
   }
 }
 
@@ -89,10 +93,15 @@ void TCPStreamSink::socketWritableHandler1() {
 void TCPStreamSink::afterGettingFrame(void* clientData, unsigned frameSize, unsigned numTruncatedBytes,
 				struct timeval /*presentationTime*/, unsigned /*durationInMicroseconds*/) {
   TCPStreamSink* sink = (TCPStreamSink*)clientData;
-  sink->afterGettingFrame1(frameSize, numTruncatedBytes);
+  sink->afterGettingFrame(frameSize, numTruncatedBytes);
 }
 
-void TCPStreamSink::afterGettingFrame1(unsigned frameSize, unsigned numTruncatedBytes) {
+void TCPStreamSink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes) {
+  if (numTruncatedBytes > 0) {
+    envir() << "TCPStreamSink::afterGettingFrame(): The input frame data was too large for our buffer.  "
+	    << numTruncatedBytes
+	    << " bytes of trailing data was dropped!  Correct this by increasing the definition of \"TCP_STREAM_SINK_BUFFER_SIZE\" in \"include/TCPStreamSink.hh\".\n";
+  }
   fUnwrittenBytesEnd += frameSize;
   processBuffer();
 }

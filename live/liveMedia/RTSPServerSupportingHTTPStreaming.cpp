@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -14,13 +14,16 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
 // "liveMedia"
-// Copyright (c) 1996-2012 Live Networks, Inc.  All rights reserved.
+// Copyright (c) 1996-2017 Live Networks, Inc.  All rights reserved.
 // A server that supports both RTSP, and HTTP streaming (using Apple's "HTTP Live Streaming" protocol)
 // Implementation
 
+#include "RTSPServer.hh"
 #include "RTSPServerSupportingHTTPStreaming.hh"
 #include "RTSPCommon.hh"
+#ifndef _WIN32_WCE
 #include <sys/stat.h>
+#endif
 #include <time.h>
 
 RTSPServerSupportingHTTPStreaming*
@@ -41,38 +44,39 @@ RTSPServerSupportingHTTPStreaming
 RTSPServerSupportingHTTPStreaming::~RTSPServerSupportingHTTPStreaming() {
 }
 
-RTSPServer::RTSPClientSession*
-RTSPServerSupportingHTTPStreaming::createNewClientSession(unsigned sessionId, int clientSocket, struct sockaddr_in clientAddr) {
-  return new RTSPClientSessionSupportingHTTPStreaming(*this, sessionId, clientSocket, clientAddr);
+GenericMediaServer::ClientConnection*
+RTSPServerSupportingHTTPStreaming::createNewClientConnection(int clientSocket, struct sockaddr_in clientAddr) {
+  return new RTSPClientConnectionSupportingHTTPStreaming(*this, clientSocket, clientAddr);
 }
 
-RTSPServerSupportingHTTPStreaming::RTSPClientSessionSupportingHTTPStreaming
-::RTSPClientSessionSupportingHTTPStreaming(RTSPServer& ourServer, unsigned sessionId, int clientSocket, struct sockaddr_in clientAddr)
-  : RTSPClientSession(ourServer, sessionId, clientSocket, clientAddr),
-    fPlaylistSource(NULL), fTCPSink(NULL) {
+RTSPServerSupportingHTTPStreaming::RTSPClientConnectionSupportingHTTPStreaming
+::RTSPClientConnectionSupportingHTTPStreaming(RTSPServer& ourServer, int clientSocket, struct sockaddr_in clientAddr)
+  : RTSPClientConnection(ourServer, clientSocket, clientAddr),
+    fClientSessionId(0), fStreamSource(NULL), fPlaylistSource(NULL), fTCPSink(NULL) {
 }
 
-RTSPServerSupportingHTTPStreaming::RTSPClientSessionSupportingHTTPStreaming::~RTSPClientSessionSupportingHTTPStreaming() {
+RTSPServerSupportingHTTPStreaming::RTSPClientConnectionSupportingHTTPStreaming::~RTSPClientConnectionSupportingHTTPStreaming() {
   Medium::close(fPlaylistSource);
+  Medium::close(fStreamSource);
   Medium::close(fTCPSink);
 }
 
 static char const* lastModifiedHeader(char const* fileName) {
   static char buf[200];
+  buf[0] = '\0'; // by default, return an empty string
 
+#ifndef _WIN32_WCE
   struct stat sb;
   int statResult = stat(fileName, &sb);
-  if (statResult != 0) {
-    // Failed to 'stat' the file; return an empty string
-    buf[0] = '\0';
-  } else {
+  if (statResult == 0) {
     strftime(buf, sizeof buf, "Last-Modified: %a, %b %d %Y %H:%M:%S GMT\r\n", gmtime((const time_t*)&sb.st_mtime));
   }
+#endif
 
   return buf;
 }
 
-void RTSPServerSupportingHTTPStreaming::RTSPClientSessionSupportingHTTPStreaming
+void RTSPServerSupportingHTTPStreaming::RTSPClientConnectionSupportingHTTPStreaming
 ::handleHTTPCmd_StreamingGET(char const* urlSuffix, char const* /*fullRequestStr*/) {
   // If "urlSuffix" ends with "?segment=<offset-in-seconds>,<duration-in-seconds>", then strip this off, and send the
   // specified segment.  Otherwise, construct and send a playlist that consists of segments from the specified file.
@@ -104,24 +108,18 @@ void RTSPServerSupportingHTTPStreaming::RTSPClientSessionSupportingHTTPStreaming
 
       // Call "getStreamParameters()" to create the stream's source.  (Because we're not actually streaming via RTP/RTCP, most
       // of the parameters to the call are dummy.)
+      ++fClientSessionId;
       Port clientRTPPort(0), clientRTCPPort(0), serverRTPPort(0), serverRTCPPort(0);
       netAddressBits destinationAddress = 0;
       u_int8_t destinationTTL = 0;
       Boolean isMulticast = False;
       void* streamToken;
-      subsession->getStreamParameters(fOurSessionId, 0, clientRTPPort,clientRTCPPort, 0,0,0, destinationAddress,destinationTTL, isMulticast, serverRTPPort,serverRTCPPort, streamToken);
-      
-      // Set up our "fStreamStates", just as we would if we were handling a RTSP "SETUP":
-      reclaimStreamStates();
-      fNumStreamStates = 1;
-      fStreamStates = new struct streamState[fNumStreamStates];
-      fStreamStates[0].subsession = subsession;
-      fStreamStates[0].streamToken = streamToken;
+      subsession->getStreamParameters(fClientSessionId, 0, clientRTPPort,clientRTCPPort, -1,0,0, destinationAddress,destinationTTL, isMulticast, serverRTPPort,serverRTCPPort, streamToken);
       
       // Seek the stream source to the desired place, with the desired duration, and (as a side effect) get the number of bytes:
       double dOffsetInSeconds = (double)offsetInSeconds;
       u_int64_t numBytes;
-      subsession->seekStream(fOurSessionId, streamToken, dOffsetInSeconds, (double)durationInSeconds, numBytes);
+      subsession->seekStream(fClientSessionId, streamToken, dOffsetInSeconds, (double)durationInSeconds, numBytes);
       unsigned numTSBytesToStream = (unsigned)numBytes;
       
       if (numTSBytesToStream == 0) {
@@ -148,10 +146,14 @@ void RTSPServerSupportingHTTPStreaming::RTSPClientSessionSupportingHTTPStreaming
       fResponseBuffer[0] = '\0'; // We've already sent the response.  This tells the calling code not to send it again.
       
       // Ask the media source to deliver - to the TCP sink - the desired data:
-      FramedSource* mediaSource = subsession->getStreamSource(streamToken);
-      if (mediaSource != NULL) {
+      if (fStreamSource != NULL) { // sanity check
+	if (fTCPSink != NULL) fTCPSink->stopPlaying();
+	Medium::close(fStreamSource);
+      }
+      fStreamSource = subsession->getStreamSource(streamToken);
+      if (fStreamSource != NULL) {
 	if (fTCPSink == NULL) fTCPSink = TCPStreamSink::createNew(envir(), fClientOutputSocket);
-	fTCPSink->startPlaying(*mediaSource, afterStreaming, this);
+	fTCPSink->startPlaying(*fStreamSource, afterStreaming, this);
       }
     } while(0);
 
@@ -195,7 +197,7 @@ void RTSPServerSupportingHTTPStreaming::RTSPClientSessionSupportingHTTPStreaming
     "#EXT-X-ENDLIST\r\n";
   unsigned const playlistSuffixFmt_maxLen = strlen(playlistSuffixFmt);
 
-  // Figure out the 'target duration' that will produce a paylist that will fit in our response buffer.  (But make it at least 10s.)
+  // Figure out the 'target duration' that will produce a playlist that will fit in our response buffer.  (But make it at least 10s.)
   unsigned const playlistMaxSize = 10000;
   unsigned const mediaFileSpecsMaxSize = playlistMaxSize - (playlistPrefixFmt_maxLen + playlistSuffixFmt_maxLen);
   unsigned const maxNumMediaFileSpecs = mediaFileSpecsMaxSize/playlistMediaFileSpecFmt_maxLen;
@@ -252,8 +254,15 @@ void RTSPServerSupportingHTTPStreaming::RTSPClientSessionSupportingHTTPStreaming
   fTCPSink->startPlaying(*fPlaylistSource, afterStreaming, this);
 }
 
-void RTSPServerSupportingHTTPStreaming::RTSPClientSessionSupportingHTTPStreaming::afterStreaming(void* clientData) {
-   RTSPServerSupportingHTTPStreaming::RTSPClientSessionSupportingHTTPStreaming* clientSession
-    = (RTSPServerSupportingHTTPStreaming::RTSPClientSessionSupportingHTTPStreaming*)clientData;
-   delete clientSession;
+void RTSPServerSupportingHTTPStreaming::RTSPClientConnectionSupportingHTTPStreaming::afterStreaming(void* clientData) {
+   RTSPServerSupportingHTTPStreaming::RTSPClientConnectionSupportingHTTPStreaming* clientConnection
+    = (RTSPServerSupportingHTTPStreaming::RTSPClientConnectionSupportingHTTPStreaming*)clientData;
+   // Arrange to delete the 'client connection' object:
+   if (clientConnection->fRecursionCount > 0) {
+     // We're still in the midst of handling a request
+     clientConnection->fIsActive = False; // will cause the object to get deleted at the end of handling the request
+   } else {
+     // We're no longer handling a request; delete the object now:
+     delete clientConnection;
+   }
 }

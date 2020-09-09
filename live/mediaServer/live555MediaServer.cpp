@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -13,7 +13,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
-// Copyright (c) 1996-2012, Live Networks, Inc.  All rights reserved
+// Copyright (c) 1996-2017, Live Networks, Inc.  All rights reserved
 // LIVE555 Media Server
 // main program
 
@@ -59,6 +59,7 @@ int main(int argc, char** argv) {
        << urlPrefix << "<filename>\nwhere <filename> is a file present in the current directory.\n";
   *env << "Each file's type is inferred from its name suffix:\n";
   *env << "\t\".264\" => a H.264 Video Elementary Stream file\n";
+  *env << "\t\".265\" => a H.265 Video Elementary Stream file\n";
   *env << "\t\".aac\" => an AAC Audio (ADTS format) file\n";
   *env << "\t\".ac3\" => an AC-3 Audio file\n";
   *env << "\t\".amr\" => an AMR Audio file\n";
@@ -67,8 +68,10 @@ int main(int argc, char** argv) {
   *env << "\t\".mkv\" => a Matroska audio+video+(optional)subtitles file\n";
   *env << "\t\".mp3\" => a MPEG-1 or 2 Audio file\n";
   *env << "\t\".mpg\" => a MPEG-1 or 2 Program Stream (audio+video) file\n";
+  *env << "\t\".ogg\" or \".ogv\" or \".opus\" => an Ogg audio and/or video file\n";
   *env << "\t\".ts\" => a MPEG Transport Stream file\n";
   *env << "\t\t(a \".tsx\" index file - if present - provides server 'trick play' support)\n";
+  *env << "\t\".vob\" => a VOB (MPEG-2 video with AC-3 audio) file\n";
   *env << "\t\".wav\" => a WAV Audio file\n";
   *env << "\t\".webm\" => a WebM audio(Vorbis)+video(VP8) file\n";
   *env << "See http://www.live555.com/mediaServer/ for additional documentation.\n";

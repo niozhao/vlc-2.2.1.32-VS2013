@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -13,7 +13,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
-// Copyright (c) 1996-2012, Live Networks, Inc.  All rights reserved
+// Copyright (c) 1996-2017, Live Networks, Inc.  All rights reserved
 // A test program that reads a MPEG-2 Transport Stream file,
 // and streams it using RTP
 // main program
@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
 #ifdef USE_SSM
     = "232.255.42.42";
 #else
-    = "239.255.42.42";
+  = "239.255.42.42";
   // Note: This is a multicast address.  If you wish to stream using
   // unicast instead, then replace this string with the unicast address
   // of the (single) destination.  (You may also need to make a similar
@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
 
   // Create an appropriate 'RTP sink' from the RTP 'groupsock':
   videoSink =
-    SimpleRTPSink::createNew(*env, &rtpGroupsock, 33, 90000, "video", "mp2t",
+    SimpleRTPSink::createNew(*env, &rtpGroupsock, 33, 90000, "video", "MP2T",
 			     1, True, False /*no 'M' bit*/);
 
   // Create (and start) a 'RTCP instance' for this RTP sink:

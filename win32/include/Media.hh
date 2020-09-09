@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -14,7 +14,7 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
 // "liveMedia"
-// Copyright (c) 1996-2014 Live Networks, Inc.  All rights reserved.
+// Copyright (c) 1996-2017 Live Networks, Inc.  All rights reserved.
 // Medium
 // C++ header
 
@@ -68,7 +68,6 @@ public:
   virtual Boolean isRTSPServer() const;
   virtual Boolean isMediaSession() const;
   virtual Boolean isServerMediaSession() const;
-  virtual Boolean isDarwinInjector() const;
 
 protected:
   friend class MediaLookupTable;
@@ -120,7 +119,7 @@ private:
 class _Tables {
 public:
   static _Tables* getOurTables(UsageEnvironment& env, Boolean createIfNotPresent = True);
-      // returns a pointer to an "ourTables" structure (creating it if necessary)
+      // returns a pointer to a "_Tables" structure (creating it if necessary)
   void reclaimIfPossible();
       // used to delete ourselves when we're no longer used
 

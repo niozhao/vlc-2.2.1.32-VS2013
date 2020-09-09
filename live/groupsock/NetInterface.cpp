@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -14,7 +14,7 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
 // "mTunnel" multicast access service
-// Copyright (c) 1996-2012 Live Networks, Inc.  All rights reserved.
+// Copyright (c) 1996-2017 Live Networks, Inc.  All rights reserved.
 // Network Interfaces
 // Implementation
 
@@ -90,19 +90,29 @@ Socket::Socket(UsageEnvironment& env, Port port)
   fSocketNum = setupDatagramSocket(fEnv, port);
 }
 
+void Socket::reset() {
+  if (fSocketNum >= 0) closeSocket(fSocketNum);
+  fSocketNum = -1;
+}
+
 Socket::~Socket() {
-  closeSocket(fSocketNum);
+  reset();
 }
 
 Boolean Socket::changePort(Port newPort) {
   int oldSocketNum = fSocketNum;
+  unsigned oldReceiveBufferSize = getReceiveBufferSize(fEnv, fSocketNum);
+  unsigned oldSendBufferSize = getSendBufferSize(fEnv, fSocketNum);
   closeSocket(fSocketNum);
+
   fSocketNum = setupDatagramSocket(fEnv, newPort);
   if (fSocketNum < 0) {
     fEnv.taskScheduler().turnOffBackgroundReadHandling(oldSocketNum);
     return False;
   }
 
+  setReceiveBufferTo(fEnv, fSocketNum, oldReceiveBufferSize);
+  setSendBufferTo(fEnv, fSocketNum, oldSendBufferSize);
   if (fSocketNum != oldSocketNum) { // the socket number has changed, so move any event handling for it:
     fEnv.taskScheduler().moveSocketHandling(oldSocketNum, fSocketNum);
   }

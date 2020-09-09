@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -14,7 +14,7 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
 // "liveMedia"
-// Copyright (c) 1996-2012 Live Networks, Inc.  All rights reserved.
+// Copyright (c) 1996-2017 Live Networks, Inc.  All rights reserved.
 // A WAV audio file source
 // NOTE: Samples are returned in little-endian order (the same order in which
 // they were stored in the file).
@@ -44,7 +44,8 @@ public:
 
   unsigned numPCMBytes() const;
   void setScaleFactor(int scale);
-  void seekToPCMByte(unsigned byteNumber, unsigned numBytesToStream);
+  void seekToPCMByte(unsigned byteNumber);
+  void limitNumBytesToStream(unsigned numBytesToStream);
       // if "numBytesToStream" is >0, then we limit the stream to that number of bytes, before treating it as EOF
 
   unsigned char getAudioFormat();
@@ -55,17 +56,25 @@ protected:
 
   virtual ~WAVAudioFileSource();
 
+  static void fileReadableHandler(WAVAudioFileSource* source, int mask);
+  void doReadFromFile();
+
 private:
   // redefined virtual functions:
   virtual void doGetNextFrame();
+  virtual void doStopGettingFrames();
   virtual Boolean setInputPort(int portIndex);
   virtual double getAverageLevel() const;
+
+protected:
+  unsigned fPreferredFrameSize;
 
 private:
   FILE* fFid;
   double fPlayTimePerSample; // useconds
-  unsigned fPreferredFrameSize;
+  Boolean fFidIsSeekable;
   unsigned fLastPlayTime; // useconds
+  Boolean fHaveStartedReading;
   unsigned fWAVHeaderSize;
   unsigned fFileSize;
   int fScaleFactor;

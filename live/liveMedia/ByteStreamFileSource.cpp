@@ -1,7 +1,7 @@
 /**********
 This library is free software; you can redistribute it and/or modify it under
 the terms of the GNU Lesser General Public License as published by the
-Free Software Foundation; either version 2.1 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version. (See <http://www.gnu.org/copyleft/lesser.html>.)
 
 This library is distributed in the hope that it will be useful, but WITHOUT
@@ -14,23 +14,9 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
 // "liveMedia"
-// Copyright (c) 1996-2012 Live Networks, Inc.  All rights reserved.
+// Copyright (c) 1996-2017 Live Networks, Inc.  All rights reserved.
 // A file source that is a plain byte stream (rather than frames)
 // Implementation
-
-#if (defined(__WIN32__) || defined(_WIN32)) && !defined(_WIN32_WCE)
-#include <io.h>
-#include <fcntl.h>
-#define READ_FROM_FILES_SYNCHRONOUSLY 1
-    // Because Windows is a silly toy operating system that doesn't (reliably) treat
-    // open files as being readable sockets (which can be handled within the default
-    // "BasicTaskScheduler" event loop, using "select()"), we implement file reading
-    // in Windows using synchronous, rather than asynchronous, I/O.  This can severely
-    // limit the scalability of servers using this code that run on Windows.
-    // If this is a problem for you, then either use a better operating system,
-    // or else write your own Windows-specific event loop ("TaskScheduler" subclass)
-    // that can handle readable data in Windows open files as an event.
-#endif
 
 #include "ByteStreamFileSource.hh"
 #include "InputFile.hh"
@@ -71,8 +57,11 @@ void ByteStreamFileSource::seekToByteAbsolute(u_int64_t byteNumber, u_int64_t nu
   fLimitNumBytesToStream = fNumBytesToStream > 0;
 }
 
-void ByteStreamFileSource::seekToByteRelative(int64_t offset) {
+void ByteStreamFileSource::seekToByteRelative(int64_t offset, u_int64_t numBytesToStream) {
   SeekFile64(fFid, offset, SEEK_CUR);
+
+  fNumBytesToStream = numBytesToStream;
+  fLimitNumBytesToStream = fNumBytesToStream > 0;
 }
 
 void ByteStreamFileSource::seekToEnd() {
@@ -90,12 +79,7 @@ ByteStreamFileSource::ByteStreamFileSource(UsageEnvironment& env, FILE* fid,
 #endif
 
   // Test whether the file is seekable
-  if (SeekFile64(fFid, 1, SEEK_CUR) >= 0) {
-    fFidIsSeekable = True;
-    SeekFile64(fFid, -1, SEEK_CUR);
-  } else {
-    fFidIsSeekable = False;
-  }
+  fFidIsSeekable = FileIsSeekable(fFid);
 }
 
 ByteStreamFileSource::~ByteStreamFileSource() {
@@ -110,7 +94,7 @@ ByteStreamFileSource::~ByteStreamFileSource() {
 
 void ByteStreamFileSource::doGetNextFrame() {
   if (feof(fFid) || ferror(fFid) || (fLimitNumBytesToStream && fNumBytesToStream == 0)) {
-    handleClosure(this);
+    handleClosure();
     return;
   }
 
@@ -127,6 +111,7 @@ void ByteStreamFileSource::doGetNextFrame() {
 }
 
 void ByteStreamFileSource::doStopGettingFrames() {
+  envir().taskScheduler().unscheduleDelayedTask(nextTask());
 #ifndef READ_FROM_FILES_SYNCHRONOUSLY
   envir().taskScheduler().turnOffBackgroundReadHandling(fileno(fFid));
   fHaveStartedReading = False;
@@ -160,7 +145,7 @@ void ByteStreamFileSource::doReadFromFile() {
   }
 #endif
   if (fFrameSize == 0) {
-    handleClosure(this);
+    handleClosure();
     return;
   }
   fNumBytesToStream -= fFrameSize;
