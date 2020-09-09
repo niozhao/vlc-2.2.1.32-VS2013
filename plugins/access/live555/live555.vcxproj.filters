@@ -82,13 +82,7 @@
     <ClCompile Include="..\..\..\live\groupsock\NetInterface.cpp">
       <Filter>Source Files\live\groupsock</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\live\liveMedia\AACAudioMatroskaFileServerMediaSubsession.cpp">
-      <Filter>Source Files\live\liveMedia</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\live\liveMedia\AC3AudioFileServerMediaSubsession.cpp">
-      <Filter>Source Files\live\liveMedia</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\live\liveMedia\AC3AudioMatroskaFileServerMediaSubsession.cpp">
       <Filter>Source Files\live\liveMedia</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\live\liveMedia\AC3AudioRTPSink.cpp">
@@ -154,9 +148,6 @@
     <ClCompile Include="..\..\..\live\liveMedia\ByteStreamMultiFileSource.cpp">
       <Filter>Source Files\live\liveMedia</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\live\liveMedia\DarwinInjector.cpp">
-      <Filter>Source Files\live\liveMedia</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\live\liveMedia\DeviceSource.cpp">
       <Filter>Source Files\live\liveMedia</Filter>
     </ClCompile>
@@ -218,9 +209,6 @@
       <Filter>Source Files\live\liveMedia</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\live\liveMedia\H264VideoFileSink.cpp">
-      <Filter>Source Files\live\liveMedia</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\live\liveMedia\H264VideoMatroskaFileServerMediaSubsession.cpp">
       <Filter>Source Files\live\liveMedia</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\live\liveMedia\H264VideoRTPSink.cpp">
@@ -299,9 +287,6 @@
       <Filter>Source Files\live\liveMedia</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\live\liveMedia\MP3FileSource.cpp">
-      <Filter>Source Files\live\liveMedia</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\live\liveMedia\MP3HTTPSource.cpp">
       <Filter>Source Files\live\liveMedia</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\live\liveMedia\MP3Internals.cpp">
@@ -502,9 +487,6 @@
     <ClCompile Include="..\..\..\live\liveMedia\VideoRTPSink.cpp">
       <Filter>Source Files\live\liveMedia</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\live\liveMedia\VorbisAudioMatroskaFileServerMediaSubsession.cpp">
-      <Filter>Source Files\live\liveMedia</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\..\live\liveMedia\VorbisAudioRTPSink.cpp">
       <Filter>Source Files\live\liveMedia</Filter>
     </ClCompile>
@@ -534,6 +516,57 @@
     </ClCompile>
     <ClCompile Include="..\..\..\live\UsageEnvironment\UsageEnvironment.cpp">
       <Filter>Source Files\live\UsageEnvironment</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\ourMD5.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\H264or5VideoFileSink.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\H264or5VideoRTPSink.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\H264or5VideoStreamDiscreteFramer.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\H264or5VideoStreamFramer.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\H265VideoRTPSink.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\H265VideoRTPSource.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\H265VideoStreamDiscreteFramer.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\VP9VideoRTPSink.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\VP9VideoRTPSource.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\TheoraVideoRTPSink.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\TheoraVideoRTPSource.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\MatroskaFileServerMediaSubsession.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\GenericMediaServer.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\RTSPServerRegister.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\ProxyServerMediaSession.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\RTSPRegisterSender.cpp">
+      <Filter>Source Files\live\liveMedia</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
