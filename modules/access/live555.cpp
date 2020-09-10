@@ -1853,6 +1853,58 @@ static void StreamRead( void *p_private, unsigned int i_size,
 
     //msg_Dbg( p_demux, "pts: %d", pts.tv_sec );
 
+
+	struct timeval timeNow;
+	gettimeofday(&timeNow, NULL);
+	int64_t nowLong = (int64_t)timeNow.tv_sec * INT64_C(1000000) + (int64_t)timeNow.tv_usec;
+	static int64_t begin_time = nowLong;
+	if (nowLong - begin_time >= 5 * INT64_C(1000000))
+	{
+		begin_time = nowLong;
+		//每隔一段时间检查下socket receive buffer大小，因为播放组播rtsp时，若本机就是组播服务器则会出现buffer大小很小0或者2K，
+		//导致接收数据不完整，从而出现花屏现象。
+		MediaSubsession         *sub = NULL;
+		MediaSubsessionIterator iter(*p_sys->ms);
+		while ((sub = iter.next()) != NULL)
+		{
+			unsigned int   i_receive_buffer = 0;
+			bool bGet = false;
+			/* Value taken from mplayer */
+			if (!strcmp(sub->mediumName(), "audio"))
+			{
+				bGet = true;
+				i_receive_buffer = 100000;
+			}
+			else if (!strcmp(sub->mediumName(), "video"))
+			{
+				bGet = true;
+				i_receive_buffer = 2000000;
+			}
+			else
+				continue;
+
+			if (bGet && sub->rtpSource())
+			{
+				int fd = sub->rtpSource()->RTPgs()->socketNum();
+				unsigned result = 0;
+				result = getReceiveBufferSize(*p_sys->env, fd);
+
+				//msg_Info(p_demux, "streamread getReceiveBufferSize %s result:%u ", sub->mediumName(), result);
+
+				if (result < 50 * 1024)
+				{
+					/* Increase the buffer size */
+					unsigned res = 0;
+					res = increaseReceiveBufferTo(*p_sys->env, fd, i_receive_buffer);
+					//msg_Info(p_demux, "streamread increaseReceiveBufferTo %u, result:%u, info:%s", i_receive_buffer, res, buffer);
+				}
+			}
+		}
+	}
+	
+
+
+
     int64_t i_pts = (int64_t)pts.tv_sec * INT64_C(1000000) +
         (int64_t)pts.tv_usec;
 

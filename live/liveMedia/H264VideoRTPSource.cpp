@@ -85,12 +85,12 @@ Boolean H264VideoRTPSource
     // For these NALUs, the first two bytes are the FU indicator and the FU header.
     // If the start bit is set, we reconstruct the original NAL header into byte 1:
     if (packetSize < 2) return False;
-    unsigned char startBit = headerStart[1]&0x80;
-    unsigned char endBit = headerStart[1]&0x40;
+    unsigned char startBit = headerStart[1]&0x80;  //Ox80: 1000 0000
+    unsigned char endBit = headerStart[1]&0x40;  //0x40: 0100 0000
     if (startBit) {
       fCurrentPacketBeginsFrame = True;
 
-      headerStart[1] = (headerStart[0]&0xE0)|(headerStart[1]&0x1F);
+      headerStart[1] = (headerStart[0]&0xE0)|(headerStart[1]&0x1F); //0xE0: 1110 0000, 0x1F: 0001 1111, 第一个字节的前3位+第二个字节的后5位，组成该NAL的头
       numBytesToSkip = 1;
     } else {
       // The start bit is not set, so we skip both the FU indicator and header:
