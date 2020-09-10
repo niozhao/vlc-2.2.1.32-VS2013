@@ -36,6 +36,8 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #endif
 #endif
 
+#define VLC_PATCH_RTSPCLIENT_SERVERSTRING
+
 class RTSPClient: public Medium {
 public:
   static RTSPClient* createNew(UsageEnvironment& env, char const* rtspURL,
@@ -155,7 +157,7 @@ public:
       // Our implementation automatically does this just prior to sending each "PLAY" command;
       // You should not call these functions yourself unless you know what you're doing.
 
-  void setSpeed(MediaSession& session, float speed = 1.0f);
+  void setSpeed(MediaSession* session, float speed = 1.0f);
       // Set (recorded) media download speed to given value to support faster download using 'Speed:'
       // option on 'PLAY' command.
 
@@ -186,6 +188,7 @@ public:
   unsigned sessionTimeoutParameter() const { return fSessionTimeoutParameter; }
 
   char const* url() const { return fBaseURL; }
+  char const* serverString() const { return fserverString; }
 
   static unsigned responseBufferSize;
 
@@ -238,6 +241,7 @@ protected:
 
   void reset();
   void setBaseURL(char const* url);
+  void setServerString(char const* str);
   int grabSocket(); // allows a subclass to reuse our input socket, so that it won't get closed when we're deleted
   virtual unsigned sendRequest(RequestRecord* request);
   virtual Boolean setRequestFields(RequestRecord* request,
@@ -286,7 +290,7 @@ private:
   Boolean parseRTPInfoParams(char const*& paramStr, u_int16_t& seqNum, u_int32_t& timestamp);
   Boolean handleSETUPResponse(MediaSubsession& subsession, char const* sessionParamsStr, char const* transportParamsStr,
 			      Boolean streamUsingTCP);
-  Boolean handlePLAYResponse(MediaSession& session, MediaSubsession& subsession,
+  Boolean handlePLAYResponse(MediaSession* session, MediaSubsession* subsession,
                              char const* scaleParamsStr, const char* speedParamsStr,
 			     char const* rangeParamsStr, char const* rtpInfoParamsStr);
   Boolean handleTEARDOWNResponse(MediaSession& session, MediaSubsession& subsession);
@@ -334,6 +338,7 @@ private:
   unsigned fUserAgentHeaderStrLen;
   int fInputSocketNum, fOutputSocketNum;
   char* fBaseURL;
+  char *fserverString;
   unsigned char fTCPStreamIdCount; // used for (optional) RTP/TCP
   char* fLastSessionId;
   unsigned fSessionTimeoutParameter; // optionally set in response "Session:" headers
