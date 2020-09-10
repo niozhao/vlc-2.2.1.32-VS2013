@@ -618,6 +618,15 @@ static block_t *ParseNALBlock( decoder_t *p_dec, bool *pb_ts_used, block_t *p_fr
         cc_Flush( &p_sys->cc_next );
     }
 
+	*pb_ts_used = false;
+	if (p_sys->i_frame_dts <= VLC_TS_INVALID &&
+		p_sys->i_frame_pts <= VLC_TS_INVALID)
+	{
+		p_sys->i_frame_dts = i_frag_dts;
+		p_sys->i_frame_pts = i_frag_pts;
+		*pb_ts_used = true;
+	}
+
     if( ( !p_sys->b_sps || !p_sys->b_pps ) &&
         i_nal_type >= NAL_SLICE && i_nal_type <= NAL_SLICE_IDR )
     {
@@ -631,13 +640,18 @@ static block_t *ParseNALBlock( decoder_t *p_dec, bool *pb_ts_used, block_t *p_fr
 
         ParseSlice( p_dec, &b_new_picture, &slice, i_nal_ref_idc, i_nal_type, p_frag );
 
+		/* Append the block */
+		if (p_frag)
+			block_ChainAppend(&p_sys->p_frame, p_frag);
+
+		/* */
+		p_sys->slice = slice;
+		p_sys->b_slice = true;
+
         /* */
         if( b_new_picture && p_sys->b_slice )
             p_pic = OutputPicture( p_dec );
 
-        /* */
-        p_sys->slice = slice;
-        p_sys->b_slice = true;
     }
     else if( i_nal_type == NAL_SPS )
     {
@@ -665,8 +679,6 @@ static block_t *ParseNALBlock( decoder_t *p_dec, bool *pb_ts_used, block_t *p_fr
              i_nal_type == NAL_SEI ||
              ( i_nal_type >= 13 && i_nal_type <= 18 ) )
     {
-        if( p_sys->b_slice )
-            p_pic = OutputPicture( p_dec );
 
         /* Parse SEI for CC support */
         if( i_nal_type == NAL_SEI )
@@ -685,20 +697,16 @@ static block_t *ParseNALBlock( decoder_t *p_dec, bool *pb_ts_used, block_t *p_fr
                 p_frag->i_flags |= BLOCK_FLAG_PRIVATE_AUD;
             }
         }
+
+				/* Append the block */
+		if (p_frag)
+			block_ChainAppend(&p_sys->p_frame, p_frag);
+
+		if (p_sys->b_slice)
+			p_pic = OutputPicture(p_dec);
     }
 
-    /* Append the block */
-    if( p_frag )
-        block_ChainAppend( &p_sys->p_frame, p_frag );
 
-    *pb_ts_used = false;
-    if( p_sys->i_frame_dts <= VLC_TS_INVALID &&
-        p_sys->i_frame_pts <= VLC_TS_INVALID )
-    {
-        p_sys->i_frame_dts = i_frag_dts;
-        p_sys->i_frame_pts = i_frag_pts;
-        *pb_ts_used = true;
-    }
     return p_pic;
 }
 

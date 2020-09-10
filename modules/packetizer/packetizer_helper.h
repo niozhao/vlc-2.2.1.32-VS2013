@@ -193,6 +193,7 @@ static inline block_t *packetizer_Packetize( packetizer_t *p_pack, block_t **pp_
             if( !p_pic )
             {
                 p_pack->i_state = STATE_NOSYNC;
+				block_BytestreamCheckStartcodeAndRelease(&p_pack->bytestream, p_pack->p_startcode, p_pack->i_startcode);
                 break;
             }
             if( p_pack->pf_validate( p_pack->p_private, p_pic ) )
@@ -203,7 +204,10 @@ static inline block_t *packetizer_Packetize( packetizer_t *p_pack, block_t **pp_
             }
 
             /* So p_block doesn't get re-added several times */
-            *pp_block = block_BytestreamPop( &p_pack->bytestream );
+			block_t * tmp_block = block_BytestreamPop(&p_pack->bytestream);
+
+			//检查block中剩下的数据是否只有startCode，若是，Release it.
+			*pp_block = block_CheckStartcodeAndRelease(tmp_block, p_pack->p_startcode, p_pack->i_startcode);
 
             p_pack->i_state = STATE_NOSYNC;
 

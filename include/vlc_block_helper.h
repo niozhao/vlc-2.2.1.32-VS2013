@@ -514,4 +514,79 @@ static inline int block_FindStartcodeFromOffset(
     return VLC_EGENERIC;
 }
 
+static inline block_t * block_CheckStartcodeAndRelease(
+	block_t * block,
+	const uint8_t *p_startcode, int i_startcode_length)
+{
+	block_t * tmp_block = block;
+	while (tmp_block && tmp_block->i_buffer == i_startcode_length)
+	{
+		bool bFind = false;
+		for (int i = 0; i < i_startcode_length; i++)
+		{
+			if (p_startcode[i] != tmp_block->p_buffer[i])
+			{
+				bFind = false;
+				break;
+			}
+			if (i == i_startcode_length - 1)
+				bFind = true;
+		}
+		if (bFind)
+		{
+			block_t *p_next = tmp_block->p_next;
+
+			block_Release(tmp_block);
+			tmp_block = p_next;
+		}
+		else
+		{
+			break;
+		}
+	}
+	return tmp_block;
+}
+
+static inline bool block_BytestreamCheckStartcodeAndRelease(
+	block_bytestream_t *p_bytestream,
+	const uint8_t *p_startcode, int i_startcode_length)
+{
+	block_t *p_block;
+
+	block_BytestreamFlush(p_bytestream);
+
+	p_block = p_bytestream->p_block;
+	if (p_block == NULL)
+	{
+		return false;
+	}
+	else if (!p_block->p_next)
+	{
+		if (p_block->i_buffer == i_startcode_length + p_bytestream->i_offset)
+		{
+			bool bFind = false;
+			for (int i = 0; i < i_startcode_length; i++)
+			{
+				if (p_startcode[i] != p_block->p_buffer[i + p_bytestream->i_offset])
+				{
+					bFind = false;
+					break;
+				}
+				if (i == i_startcode_length - 1)
+					bFind = true;
+			}
+			if (bFind)
+			{
+				block_Release(p_block);
+				p_block = NULL;
+				p_bytestream->i_offset = 0;
+				p_bytestream->p_chain = p_bytestream->p_block = NULL;
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 #endif /* VLC_BLOCK_HELPER_H */

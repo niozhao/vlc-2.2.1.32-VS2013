@@ -1989,12 +1989,25 @@ static void StreamRead( void *p_private, unsigned int i_size,
             msg_Warn( p_demux, "unsupported NAL type for H265" );
 
         /* Normal NAL type */
-        p_block = block_Alloc( i_size + 4 );
-        p_block->p_buffer[0] = 0x00;
-        p_block->p_buffer[1] = 0x00;
-        p_block->p_buffer[2] = 0x00;
-        p_block->p_buffer[3] = 0x01;
-        memcpy( &p_block->p_buffer[4], tk->p_buffer, i_size );
+		p_block = block_Alloc(i_size + 4 + 4);
+		p_block->p_buffer[0] = 0x00;
+		p_block->p_buffer[1] = 0x00;
+		p_block->p_buffer[2] = 0x00;
+		p_block->p_buffer[3] = 0x01;
+
+		p_block->p_buffer[i_size + 4 + 0] = 0x00;
+		p_block->p_buffer[i_size + 4 + 1] = 0x00;
+		p_block->p_buffer[i_size + 4 + 2] = 0x00;
+		p_block->p_buffer[i_size + 4 + 3] = 0x01;
+
+		memcpy(&p_block->p_buffer[4], tk->p_buffer, i_size);
+
+		/*struct timeval timeNow;
+		gettimeofday(&timeNow, NULL);
+		int64_t nowLong = (int64_t)timeNow.tv_sec * INT64_C(1000000) + (int64_t)timeNow.tv_usec;
+		static int64_t lastTime = 0;
+		msg_Dbg(p_demux, "NioDebug Frame:%lld, size:%u, sinceLast:%lld, now:%lld", VLC_TS_0 + i_pts, i_size, nowLong - lastTime, nowLong);
+		lastTime = nowLong;*/
     }
     else if( tk->b_asf )
     {
