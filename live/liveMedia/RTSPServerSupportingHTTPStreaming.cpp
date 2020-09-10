@@ -25,6 +25,9 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #include <sys/stat.h>
 #endif
 #include <time.h>
+#ifndef MSG_NOSIGNAL
+# define MSG_NOSIGNAL 0
+#endif
 
 RTSPServerSupportingHTTPStreaming*
 RTSPServerSupportingHTTPStreaming::createNew(UsageEnvironment& env, Port rtspPort,
@@ -142,7 +145,7 @@ void RTSPServerSupportingHTTPStreaming::RTSPClientConnectionSupportingHTTPStream
 	       lastModifiedHeader(streamName),
 	       numTSBytesToStream);
       // Send the response now, because we're about to add more data (from the source):
-      send(fClientOutputSocket, (char const*)fResponseBuffer, strlen((char*)fResponseBuffer), 0);
+      send(fClientOutputSocket, (char const*)fResponseBuffer, strlen((char*)fResponseBuffer), MSG_NOSIGNAL);
       fResponseBuffer[0] = '\0'; // We've already sent the response.  This tells the calling code not to send it again.
       
       // Ask the media source to deliver - to the TCP sink - the desired data:
@@ -240,7 +243,7 @@ void RTSPServerSupportingHTTPStreaming::RTSPClientConnectionSupportingHTTPStream
 	   playlistLen);
 
   // Send the response header now, because we're about to add more data (the playlist):
-  send(fClientOutputSocket, (char const*)fResponseBuffer, strlen((char*)fResponseBuffer), 0);
+  send(fClientOutputSocket, (char const*)fResponseBuffer, strlen((char*)fResponseBuffer), MSG_NOSIGNAL);
   fResponseBuffer[0] = '\0'; // We've already sent the response.  This tells the calling code not to send it again.
 
   // Then, send the playlist.  Because it's large, we don't do so using "send()", because that might not send it all at once.

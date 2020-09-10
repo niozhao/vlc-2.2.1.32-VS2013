@@ -20,6 +20,9 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 
 #include "TCPStreamSink.hh"
 #include <GroupsockHelper.hh> // for "ignoreSigPipeOnSocket()"
+#ifndef MSG_NOSIGNAL
+# define MSG_NOSIGNAL 0
+#endif
 
 TCPStreamSink* TCPStreamSink::createNew(UsageEnvironment& env, int socketNum) {
   return new TCPStreamSink(env, socketNum);
@@ -51,7 +54,7 @@ void TCPStreamSink::processBuffer() {
   // First, try writing data to our output socket, if we can:
   if (fOutputSocketIsWritable && numUnwrittenBytes() > 0) {
     int numBytesWritten
-      = send(fOutputSocketNum, (const char*)&fBuffer[fUnwrittenBytesStart], numUnwrittenBytes(), 0);
+      = send(fOutputSocketNum, (const char*)&fBuffer[fUnwrittenBytesStart], numUnwrittenBytes(), MSG_NOSIGNAL);
     if (numBytesWritten < (int)numUnwrittenBytes()) {
       // The output socket is no longer writable.  Set a handler to be called when it becomes writable again.
       fOutputSocketIsWritable = False;

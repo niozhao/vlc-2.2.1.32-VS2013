@@ -36,6 +36,9 @@ extern "C" int initializeWinsockIfNecessary();
 #define USE_SIGNALS 1
 #endif
 #include <stdio.h>
+#ifndef MSG_NOSIGNAL
+# define MSG_NOSIGNAL 0
+#endif
 
 // By default, use INADDR_ANY for the sending and receiving interfaces:
 netAddressBits SendingInterfaceAddr = INADDR_ANY;
@@ -343,7 +346,7 @@ Boolean writeSocket(UsageEnvironment& env,
 		    unsigned char* buffer, unsigned bufferSize) {
   do {
     MAKE_SOCKADDR_IN(dest, address.s_addr, portNum);
-    int bytesSent = sendto(socket, (char*)buffer, bufferSize, 0,
+    int bytesSent = sendto(socket, (char*)buffer, bufferSize, MSG_NOSIGNAL,
 			   (struct sockaddr*)&dest, sizeof dest);
     if (bytesSent != (int)bufferSize) {
       char tmpBuf[100];

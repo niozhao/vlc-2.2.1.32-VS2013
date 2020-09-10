@@ -24,6 +24,9 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #include "Locale.hh"
 #include <GroupsockHelper.hh>
 #include "ourMD5.hh"
+#ifndef MSG_NOSIGNAL
+# define MSG_NOSIGNAL 0
+#endif
 
 ////////// RTSPClient implementation //////////
 
@@ -180,13 +183,13 @@ void RTSPClient::sendDummyUDPPackets(MediaSubsession& subsession, unsigned numDu
   }
 }
 
-void RTSPClient::setSpeed(MediaSession& session, float speed) { 
+void RTSPClient::setSpeed(MediaSession* session, float speed) {
   // Optionally set download speed for session to be used later on PLAY command:
   // The user should call this function after the MediaSession is instantiated, but before the
   // first "sendPlayCommand()" is called.
-  if (&session != NULL) {
-    session.speed() = speed;
-    MediaSubsessionIterator iter(session);
+  if (session != NULL) {
+    session->speed() = speed;
+    MediaSubsessionIterator iter(*session);
     MediaSubsession* subsession;
 
     while ((subsession = iter.next()) != NULL) {
@@ -363,7 +366,7 @@ RTSPClient::RTSPClient(UsageEnvironment& env, char const* rtspURL,
     fAllowBasicAuthentication(True), fServerAddress(0),
     fTunnelOverHTTPPortNum(tunnelOverHTTPPortNum),
     fUserAgentHeaderStr(NULL), fUserAgentHeaderStrLen(0),
-    fInputSocketNum(-1), fOutputSocketNum(-1), fBaseURL(NULL), fTCPStreamIdCount(0),
+    fInputSocketNum(-1), fOutputSocketNum(-1), fBaseURL(NULL), fserverString(NULL), fTCPStreamIdCount(0),
     fLastSessionId(NULL), fSessionTimeoutParameter(0), fSessionCookieCounter(0), fHTTPTunnelingConnectionIsPending(False) {
   setBaseURL(rtspURL);
 
@@ -413,6 +416,7 @@ void RTSPClient::reset() {
   fServerAddress = 0;
 
   setBaseURL(NULL);
+  setServerString(NULL);
 
   fCurrentAuthenticator.reset();
 
@@ -421,6 +425,10 @@ void RTSPClient::reset() {
 
 void RTSPClient::setBaseURL(char const* url) {
   delete[] fBaseURL; fBaseURL = strDup(url);
+}
+
+void RTSPClient::setServerString(char const* str) {
+  delete[] fserverString; fserverString = strDup(str);
 }
 
 int RTSPClient::grabSocket() {
@@ -536,7 +544,7 @@ unsigned RTSPClient::sendRequest(RequestRecord* request) {
       delete[] origCmd;
     }
 
-    if (send(fOutputSocketNum, cmd, strlen(cmd), 0) < 0) {
+    if (send(fOutputSocketNum, cmd, strlen(cmd), MSG_NOSIGNAL) < 0) {
       char const* errFmt = "%s send() failed: ";
       unsigned const errLength = strlen(errFmt) + strlen(request->commandName());
       char* err = new char[errLength];
@@ -1021,7 +1029,7 @@ void RTSPClient::handleIncomingRequest() {
     char tmpBuf[2*RTSP_PARAM_STRING_MAX];
     snprintf((char*)tmpBuf, sizeof tmpBuf,
              "RTSP/1.0 405 Method Not Allowed\r\nCSeq: %s\r\n\r\n", cseq);
-    send(fOutputSocketNum, tmpBuf, strlen(tmpBuf), 0);
+    send(fOutputSocketNum, tmpBuf, strlen(tmpBuf), MSG_NOSIGNAL);
   }
 }
 
@@ -1212,26 +1220,26 @@ Boolean RTSPClient::handleSETUPResponse(MediaSubsession& subsession, char const*
   return success;
 }
 
-Boolean RTSPClient::handlePLAYResponse(MediaSession& session, MediaSubsession& subsession,
+Boolean RTSPClient::handlePLAYResponse(MediaSession* session, MediaSubsession* subsession,
                                        char const* scaleParamsStr, char const* speedParamsStr,
                                        char const* rangeParamsStr, char const* rtpInfoParamsStr) {
   Boolean scaleOK = False, rangeOK = False, speedOK = False;
   do {
-    if (&session != NULL) {
+    if (session != NULL) {
       // The command was on the whole session
-      if (scaleParamsStr != NULL && !parseScaleParam(scaleParamsStr, session.scale())) break;
+      if (scaleParamsStr != NULL && !parseScaleParam(scaleParamsStr, session->scale())) break;
       scaleOK = True;
-      if (speedParamsStr != NULL && !parseSpeedParam(speedParamsStr, session.speed())) break;
+      if (speedParamsStr != NULL && !parseSpeedParam(speedParamsStr, session->speed())) break;
       speedOK = True;
       Boolean startTimeIsNow;
       if (rangeParamsStr != NULL &&
 	  !parseRangeParam(rangeParamsStr,
-			   session.playStartTime(), session.playEndTime(),
-			   session._absStartTime(), session._absEndTime(),
+               session->playStartTime(), session->playEndTime(),
+               session->_absStartTime(), session->_absEndTime(),
 			   startTimeIsNow)) break;
       rangeOK = True;
 
-      MediaSubsessionIterator iter(session);
+      MediaSubsessionIterator iter(*session);
       MediaSubsession* subsession;
       while ((subsession = iter.next()) != NULL) {
 	u_int16_t seqNum; u_int32_t timestamp;
@@ -1246,27 +1254,27 @@ Boolean RTSPClient::handlePLAYResponse(MediaSession& session, MediaSubsession& s
       }
     } else {
       // The command was on a subsession
-      if (scaleParamsStr != NULL && !parseScaleParam(scaleParamsStr, subsession.scale())) break;
+      if (scaleParamsStr != NULL && !parseScaleParam(scaleParamsStr, subsession->scale())) break;
       scaleOK = True;
-      if (speedParamsStr != NULL && !parseSpeedParam(speedParamsStr, session.speed())) break;
+      if (speedParamsStr != NULL && !parseSpeedParam(speedParamsStr, subsession->speed())) break;
       speedOK = True;
       Boolean startTimeIsNow;
       if (rangeParamsStr != NULL &&
 	  !parseRangeParam(rangeParamsStr,
-			   subsession._playStartTime(), subsession._playEndTime(),
-			   subsession._absStartTime(), subsession._absEndTime(),
+               subsession->_playStartTime(), subsession->_playEndTime(),
+               subsession->_absStartTime(), subsession->_absEndTime(),
 			   startTimeIsNow)) break;
       rangeOK = True;
 
       u_int16_t seqNum; u_int32_t timestamp;
-      subsession.rtpInfo.infoIsNew = False;
+      subsession->rtpInfo.infoIsNew = False;
       if (parseRTPInfoParams(rtpInfoParamsStr, seqNum, timestamp)) {
-	subsession.rtpInfo.seqNum = seqNum;
-	subsession.rtpInfo.timestamp = timestamp;
-	subsession.rtpInfo.infoIsNew = True;
+    subsession->rtpInfo.seqNum = seqNum;
+    subsession->rtpInfo.timestamp = timestamp;
+    subsession->rtpInfo.infoIsNew = True;
       }
 
-      if (subsession.rtpSource() != NULL) subsession.rtpSource()->enableRTCPReports() = True; // start sending RTCP "RR"s now
+      if (subsession->rtpSource() != NULL) subsession->rtpSource()->enableRTCPReports() = True; // start sending RTCP "RR"s now
     }
 
     return True;
@@ -1652,6 +1660,7 @@ void RTSPClient::handleResponseBytes(int newBytesRead) {
     char const* rtpInfoParamsStr = NULL;
     char const* wwwAuthenticateParamsStr = NULL;
     char const* publicParamsStr = NULL;
+    char const* serverStr = NULL;
     char* bodyStart = NULL;
     unsigned numBodyBytes = 0;
     responseSuccess = False;
@@ -1722,6 +1731,8 @@ void RTSPClient::handleResponseBytes(int newBytesRead) {
 	} else if (checkForHeader(lineStart, "Transport:", 10, transportParamsStr)) {
 	} else if (checkForHeader(lineStart, "Scale:", 6, scaleParamsStr)) {
 	} else if (checkForHeader(lineStart, "Speed:", 6, speedParamsStr)) {
+    } else if (checkForHeader(lineStart, "Server:", 7, serverStr)) {
+        setServerString(serverStr);
 	} else if (checkForHeader(lineStart, "Range:", 6, rangeParamsStr)) {
 	} else if (checkForHeader(lineStart, "RTP-Info:", 9, rtpInfoParamsStr)) {
 	} else if (checkForHeader(lineStart, "WWW-Authenticate:", 17, headerParamsStr)) {
@@ -1806,12 +1817,12 @@ void RTSPClient::handleResponseBytes(int newBytesRead) {
 	if (responseCode == 200) {
 	  // Do special-case response handling for some commands:
 	  if (strcmp(foundRequest->commandName(), "SETUP") == 0) {
-	    if (!handleSETUPResponse(*foundRequest->subsession(), sessionParamsStr, transportParamsStr, foundRequest->booleanFlags()&0x1)) break;
+        if (!handleSETUPResponse(*foundRequest->subsession(), sessionParamsStr, transportParamsStr, foundRequest->booleanFlags()&0x1)) break;
 	  } else if (strcmp(foundRequest->commandName(), "PLAY") == 0) {
-	    if (!handlePLAYResponse(*foundRequest->session(), *foundRequest->subsession(), scaleParamsStr, speedParamsStr, rangeParamsStr, rtpInfoParamsStr)) break;
+        if (!handlePLAYResponse(foundRequest->session(), foundRequest->subsession(), scaleParamsStr, speedParamsStr, rangeParamsStr, rtpInfoParamsStr)) break;
 	  } else if (strcmp(foundRequest->commandName(), "TEARDOWN") == 0) {
-	    if (!handleTEARDOWNResponse(*foundRequest->session(), *foundRequest->subsession())) break;
-	  } else if (strcmp(foundRequest->commandName(), "GET_PARAMETER") == 0) {
+        if (!handleTEARDOWNResponse(*foundRequest->session(), *foundRequest->subsession())) break;
+      } else if (strcmp(foundRequest->commandName(), "GET_PARAMETER") == 0) {
 	    if (!handleGET_PARAMETERResponse(foundRequest->contentStr(), bodyStart, responseEnd)) break;
 	  }
 	} else if (responseCode == 401 && handleAuthenticationFailure(wwwAuthenticateParamsStr)) {
