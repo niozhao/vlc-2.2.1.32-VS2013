@@ -54,6 +54,18 @@
     <ClCompile Include="..\..\..\live\liveMedia\DVVideoRTPSource.cpp" />
     <ClCompile Include="..\..\..\live\liveMedia\DVVideoStreamFramer.cpp" />
     <ClCompile Include="..\..\..\live\liveMedia\EBMLNumber.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FEC2DParityMultiplexor.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECCluster.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECDecoder.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECEncoder.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECGroupsock.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECInterleavedSource.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECMultiplexor.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECNonInterleavedSource.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECPacket.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECSink.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECSource.cpp" />
+    <ClCompile Include="..\..\..\live\liveMedia\fec\RTPPacket.cpp" />
     <ClCompile Include="..\..\..\live\liveMedia\FileServerMediaSubsession.cpp" />
     <ClCompile Include="..\..\..\live\liveMedia\FileSink.cpp" />
     <ClCompile Include="..\..\..\live\liveMedia\FramedFileSource.cpp" />
@@ -232,7 +244,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;LIVE555_EXPORTS;HAVE_CONFIG_H;__i386__;__PLUGIN__;CRTAPI1=_cdecl;CRTAPI2=_cdecl;MODULE_NAME=live555;MODULE_NAME_IS_live555;MODULE_STRING="live555";%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>../../../live/UsageEnvironment/include;../../../live/groupsock/include;../../../live/BasicUsageEnvironment/include;../../../live/liveMedia/include;../../../include;../../../util;../../..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../live/UsageEnvironment/include;../../../live/groupsock/include;../../../live/BasicUsageEnvironment/include;../../../live/liveMedia/include;../../../include;../../../util;../../..;../../../live/liveMedia/fec/include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

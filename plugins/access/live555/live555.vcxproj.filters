@@ -29,6 +29,9 @@
     <Filter Include="Source Files\live\UsageEnvironment">
       <UniqueIdentifier>{dac683eb-3347-4884-b6e4-0afb13ae50e8}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\live\liveMedia\fec">
+      <UniqueIdentifier>{992c2d05-00ba-481a-ab6b-7a51978ae88e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\dllsrc\dllmain.cpp">
@@ -567,6 +570,42 @@
     </ClCompile>
     <ClCompile Include="..\..\..\live\liveMedia\RTSPRegisterSender.cpp">
       <Filter>Source Files\live\liveMedia</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FEC2DParityMultiplexor.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECCluster.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECDecoder.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECEncoder.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECGroupsock.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECInterleavedSource.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECMultiplexor.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECNonInterleavedSource.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECPacket.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECSink.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\FECSource.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\live\liveMedia\fec\RTPPacket.cpp">
+      <Filter>Source Files\live\liveMedia\fec</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
