@@ -1,4 +1,5 @@
 #include "include/FECNonInterleavedSource.hh"
+#include "GroupsockHelper.hh"
 #include <iostream>
 
 FECNonInterleavedSource* FECNonInterleavedSource::createNew(UsageEnvironment& env, u_int8_t row, u_int8_t column) {

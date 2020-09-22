@@ -48,18 +48,19 @@ unsigned char* FECEncoder::generateBitString(unsigned char* rtpPacket, unsigned 
 
     uint16_t totalSize = 0;
 
-    int CC = EXTRACT_BIT_RANGE(3, 0, rtpPacket[0]);
-    totalSize += CC;
+    int CC = EXTRACT_BIT_RANGE(0, 4, rtpPacket[0]);
+    totalSize += CC * 4;
 
     Boolean hasExtensionHeader = EXTRACT_BIT(4, rtpPacket[0]) == 1 ? True : False;
     if (hasExtensionHeader) {
         int extensionSizePosition = RTP_HEADER_SIZE + CC * 4 + EXTENSION_HEADER_ID_SIZE;
         int extensionSize = ((u_int16_t)rtpPacket[extensionSizePosition] << 8) | rtpPacket[extensionSizePosition + 1];
-        totalSize += extensionSize;
+        totalSize += extensionSize * 4;
     }
 
     Boolean hasPadding = EXTRACT_BIT(5, rtpPacket[0]) == 1 ? True : False;
-    if (hasPadding) totalSize += rtpPacket[RTP_HEADER_SIZE + payloadSize - 1];  //Is one byte enough to account for padding?
+    if (hasPadding) 
+		totalSize += rtpPacket[RTP_HEADER_SIZE + payloadSize - 1];  //Is one byte enough to account for padding?
 
     totalSize += payloadSize;
 
@@ -83,7 +84,8 @@ unsigned char* FECEncoder::getPaddedRTPPayload(RTPPacket* rtpPacket, u_int16_t l
 FECPacket* FECEncoder::createFECPacket(unsigned char* fecBitString, unsigned packetSize, unsigned char* fecPayload, uint16_t sn_base, u_int8_t row, u_int8_t column) {
     unsigned char* fecBuffer = new unsigned char[packetSize];
 
-    fecBuffer[0] = 0b10000000 | (fecBitString[0] & 0b00111111);
+    //fecBuffer[0] = 0b10000000 | (fecBitString[0] & 0b00111111);
+	fecBuffer[0] = 0x80 | (fecBitString[0] & 0x3f);
     fecBuffer[1] = fecBitString[1];
     fecBuffer[2] = fecBitString[8];
     fecBuffer[3] = fecBitString[9];

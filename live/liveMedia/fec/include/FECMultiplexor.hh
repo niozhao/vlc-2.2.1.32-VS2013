@@ -13,10 +13,21 @@ protected:
 protected:
     std::queue<RTPPacket*> fRTPPackets;
     EventTriggerId fEventTriggerId;
+	int totalReceivedPacket;
+
+	unsigned char* fReadyTo; // in
+	unsigned fReadyMaxSize; // in
+	afterGettingFunc* packetReadyCallback;
+	void* fCallbackClientData;
 
 private:
     virtual void doGetNextFrame();
     static void deliverFrame0(void* clientData);
     void deliverFrame();
+	void callbackFrame();
+	int totalDecoderdNumber;
+
+	
+	
 };
 #endif

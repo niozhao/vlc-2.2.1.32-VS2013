@@ -2,6 +2,7 @@
 #include "RTPPacket.hh"
 #include <liveMedia.hh>
 
+class FECCluster;
 class FECDecoder {
 
 public:
@@ -9,7 +10,7 @@ public:
     static unsigned char* generateBitString(unsigned char* rtpPacket, unsigned payloadSize);
     //static void repairCluster(RTPPacket** cluster, unsigned d, unsigned l, u_int32_t ssrc);
     static void repairCluster(RTPPacket** cluster, unsigned row, unsigned column, unsigned ssrc);
-    static void printCluster(RTPPacket** cluster, unsigned d, unsigned l);
+	static void printCluster(FECCluster* feccluster, unsigned d, unsigned l);
 
     static u_int16_t extractFECBase(RTPPacket* rtpPacket);
     static u_int16_t extractRTPSeq(RTPPacket* rtpPacket);
@@ -28,6 +29,9 @@ private:
     static unsigned char* calculateRowBitString(RTPPacket** row, unsigned rowSize);
     static unsigned countPadding(unsigned char* payload, u_int16_t y);
     static unsigned char* generateFECBitString(unsigned char* buffer, unsigned size);
+	static unsigned char* getPaddedRTPPayload(RTPPacket* rtpPacket, u_int16_t longestPayload);
+	static unsigned char* getFECPaddedRTPPayload(RTPPacket* rtpPacket, u_int16_t longestPayload);
+	
 
     static unsigned char* createHeader(unsigned char* bitString, u_int16_t sequenceNumber, unsigned ssrc);
     static unsigned char* calculatePayload(RTPPacket** row, unsigned rowSize, u_int16_t Y);

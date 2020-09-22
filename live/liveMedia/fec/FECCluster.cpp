@@ -1,4 +1,5 @@
 #include "include/FECCluster.hh"
+#include "GroupsockHelper.hh"
 #include <iostream>
 
 FECCluster* FECCluster::createNew(u_int16_t base, u_int8_t row, u_int8_t column) {
@@ -12,11 +13,21 @@ FECCluster::FECCluster(u_int16_t base, u_int8_t row, u_int8_t column) {
 
     int size = (row + 1) * (column + 1) - 1;
     fRTPPackets = new RTPPacket*[size];
-    for (int i = 0; i < size; i++) fRTPPackets[i] = NULL;
+    for (int i = 0; i < size; i++) 
+		fRTPPackets[i] = NULL;
 
     struct timeval tp;
 	gettimeofday(&tp, NULL);
 	fTimestamp = (long long) tp.tv_sec * 1000L + tp.tv_usec / 1000;
+	//DebugPrintf("new Cluster. fBase: %u, fTimestamp:%ld\n", fBase,fTimestamp);
+}
+
+FECCluster::~FECCluster()
+{
+	int size = (fRow + 1) * (fColumn + 1) - 1;
+	for (int i = 0; i < size; i++)
+		delete fRTPPackets[i];  //所有RTP有效包的位置应该为NULL，delete FEC冗余包。
+	delete[] fRTPPackets;
 }
 
 void FECCluster::insertPacket(RTPPacket* rtpPacket) {
@@ -52,7 +63,8 @@ Boolean FECCluster::allRTPPacketsArePresent() {
     int size = sourcePacketCount();
 	for (int i = 0; i < size; i++) {
 		int index = i + i / fColumn;
-		if (fRTPPackets[index] == NULL) return False;
+		if (fRTPPackets[index] == NULL) 
+			return False;
 	}
 	return True;
 }
@@ -68,7 +80,8 @@ Boolean FECCluster::hasExpired(long long repairWindow) {
 Boolean FECCluster::hasOnlyNullPackets() {
     int size = sourcePacketCount();
 	for (int i = 0; i < size; i++) {
-		if (fRTPPackets[i] != NULL) return False;
+		if (fRTPPackets[i] != NULL) 
+			return False;
 	}
 	return True;
 }

@@ -21,6 +21,8 @@ public:
 
     int sourcePacketCount() const {return fRow * fColumn;}
 
+	~FECCluster();
+
 private:
     FECCluster(u_int16_t base, u_int8_t row, u_int8_t column);
     int getIndex(RTPPacket* rtpPacket);

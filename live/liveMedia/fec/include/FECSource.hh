@@ -4,7 +4,7 @@
 #include <queue>
 #include "FramedSource.hh"
 #include "FECPacket.hh"
-#include "FECUtilities.hh"
+//#include "FECUtilities.hh"
 
 class FECSource: public FramedSource {
 public:

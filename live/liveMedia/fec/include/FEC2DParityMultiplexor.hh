@@ -7,12 +7,19 @@
 #include "FECDecoder.hh"
 #include "FECCluster.hh"
 
+class ReorderingPacketBuffer;
+class BufferPacket;
+class BufferedPacketFactory;
+
 class FEC2DParityMultiplexor : public FECMultiplexor {
 public:
     static FEC2DParityMultiplexor* createNew(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow);
     FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow);
     ~FEC2DParityMultiplexor();
     void pushFECRTPPacket(unsigned char* buffer, unsigned bufferSize);
+	void pushFECRTPPacket(BufferedPacket* packet);
+	void createReorderBuffers(BufferedPacketFactory* packetFactory);
+	void setCallback(unsigned char* to, unsigned maxSize, afterGettingFunc*, void*);
 
 public:
     Boolean first;
@@ -37,9 +44,14 @@ private:
 
     void setBaseIfNotSet(RTPPacket* rtpPacket);
 
-    void insertPacket(RTPPacket* rtpPacket);
+    bool insertPacket(RTPPacket* rtpPacket);
 
     void printSuperBuffer();
+
+	Boolean processFECHeader(BufferedPacket* packet);
+	void resetInterFECBuffer();
+	void resetNonInterFECBuffer();
+	void preProcessFECPacket(bool bInterleave, BufferedPacket* srcPacket);  //true for bInterleave, false for NonInterleave
 
 private:
     long long fRepairWindow;
@@ -49,6 +61,24 @@ private:
 
     u_int8_t fRow;
     u_int8_t fColumn;
+
+	ReorderingPacketBuffer* fInterleavedReorderingBuffer;
+	ReorderingPacketBuffer* fNonInterleavedReorderingBuffer;
+	Boolean fCurrentPacketBeginsFrame;
+	Boolean fPacketLossInFragmentedFrame;
+	Boolean fCurrentPacketCompletesFrame;
+
+	//for Interleave
+	unsigned char* fInterFECBuffer;   //拼接的完整Interleave冗余包将会放在这里 
+	unsigned fInterMaxSize; //fInterFECBuffer 可用的空间大小
+	unsigned char *fInterTo; // fInterTo = fInterFECBuffer + offset
+	unsigned fInterFrameSize;  //Interleave冗余包的大小
+
+	//for NonInterleave
+	unsigned char* fNonInterFECBuffer;
+	unsigned fNonInterMaxSize; // in
+	unsigned char *fNonInterTo; // in
+	unsigned fNonInterFrameSize; // out
 
 };
 #endif

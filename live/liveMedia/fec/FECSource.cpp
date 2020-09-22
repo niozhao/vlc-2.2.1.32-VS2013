@@ -1,4 +1,5 @@
 #include "include/FECSource.hh"
+#include "GroupsockHelper.hh"
 #include <iostream>
 
 FECSource::FECSource(UsageEnvironment& env) : FramedSource(env) {

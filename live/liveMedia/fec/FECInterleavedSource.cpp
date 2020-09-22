@@ -1,4 +1,5 @@
 #include "include/FECInterleavedSource.hh"
+#include "GroupsockHelper.hh"
 
 FECInterleavedSource* FECInterleavedSource::createNew(UsageEnvironment& env, u_int8_t row, u_int8_t column) {
 	return new FECInterleavedSource(env, row, column);

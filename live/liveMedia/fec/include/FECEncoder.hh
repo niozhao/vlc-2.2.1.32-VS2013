@@ -4,9 +4,10 @@
 #include <liveMedia.hh>
 #include "RTPPacket.hh"
 #include "FECPacket.hh"
+#include <stdint.h>
 
 #define EXTRACT_BIT(n, x) ((x >> n) & 0x01)
-#define EXTRACT_BIT_RANGE(from, to, data) ((typeof(data))(data << (sizeof(data) * 8 - to)) >> (from + (sizeof(data) * 8 - to)))
+#define EXTRACT_BIT_RANGE(from, to, data) ((unsigned char)(data << (sizeof(data) * 8 - to)) >> (from + (sizeof(data) * 8 - to)))
 
 #define FEC_HEADER_SIZE 12
 #define FEC_BIT_STRING_LENGTH 10
