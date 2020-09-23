@@ -23,6 +23,7 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #include "Locale.hh"
 #include "GroupsockHelper.hh"
 #include <ctype.h>
+#include <vector>
 
 ////////// MediaSession //////////
 
@@ -129,51 +130,39 @@ Boolean MediaSession::initializeWithSDP(char const* sdpDescription) {
       return False;
     }
 
-    // Parse the line as "m=<medium_name> <client_portNum> RTP/AVP <fmt>"
-    // or "m=<medium_name> <client_portNum>/<num_ports> RTP/AVP <fmt>"
-    // (Should we be checking for >1 payload format number here?)#####
-    char* mediumName = strDupSize(sdpLine); // ensures we have enough space
-    char const* protocolName = NULL;
-    unsigned payloadFormat;
-    if ((sscanf(sdpLine, "m=%s %hu RTP/AVP %u",         //%hu以 unsigned short格式输出整数
-		mediumName, &subsession->fClientPortNum, &payloadFormat) == 3 ||
-	 sscanf(sdpLine, "m=%s %hu/%*u RTP/AVP %u",
-		mediumName, &subsession->fClientPortNum, &payloadFormat) == 3)
-	&& payloadFormat <= 127) {
-      protocolName = "RTP";
-    } else if ((sscanf(sdpLine, "m=%s %hu UDP %u",
-		       mediumName, &subsession->fClientPortNum, &payloadFormat) == 3 ||
-		sscanf(sdpLine, "m=%s %hu udp %u",
-		       mediumName, &subsession->fClientPortNum, &payloadFormat) == 3 ||
-		sscanf(sdpLine, "m=%s %hu RAW/RAW/UDP %u",
-		       mediumName, &subsession->fClientPortNum, &payloadFormat) == 3)
-	       && payloadFormat <= 127) {
-      // This is a RAW UDP source
-      protocolName = "UDP";
-    } else {
-      // This "m=" line is bad; output an error message saying so:
-      char* sdpLineStr;
-      if (nextSDPLine == NULL) {
-	sdpLineStr = (char*)sdpLine;
-      } else {
-	sdpLineStr = strDup(sdpLine);
-	sdpLineStr[nextSDPLine-sdpLine] = '\0';
-      }
-      envir() << "Bad SDP \"m=\" line: " <<  sdpLineStr << "\n";
-      if (sdpLineStr != (char*)sdpLine) delete[] sdpLineStr;
+	std::string strProtocolName;
+	std::string strMediumName;
+	if (!subsession->parseSDPLine_m(sdpLine, subsession->fClientPortNum, strProtocolName, strMediumName))
+	{
+        // This "m=" line is bad; output an error message saying so:
+        char* sdpLineStr;
+        if (nextSDPLine == NULL) 
+		{
+		    sdpLineStr = (char*)sdpLine;
+        } 
+	    else 
+		{
+		    sdpLineStr = strDup(sdpLine);
+		    sdpLineStr[nextSDPLine-sdpLine] = '\0';
+        }
+        envir() << "Bad SDP \"m=\" line: " <<  sdpLineStr << "\n";
+        if (sdpLineStr != (char*)sdpLine) 
+			delete[] sdpLineStr;
 
-      delete[] mediumName;
-      delete subsession;
+        delete subsession;
 
-      // Skip the following SDP lines, up until the next "m=":
-      while (1) {
-	sdpLine = nextSDPLine;
-	if (sdpLine == NULL) break; // we've reached the end
-	if (!parseSDPLine(sdpLine, nextSDPLine)) return False;
-
-	if (sdpLine[0] == 'm') break; // we've reached the next subsession
-      }
-      continue;
+        // Skip the following SDP lines, up until the next "m=":
+        while (1) 
+		{
+		   sdpLine = nextSDPLine;
+		   if (sdpLine == NULL) 
+			  break; // we've reached the end
+		   if (!parseSDPLine(sdpLine, nextSDPLine)) 
+			  return False;
+		   if (sdpLine[0] == 'm') 
+			  break; // we've reached the next subsession
+         }
+         continue;
     }
 
     // Insert this subsession at the end of the list:
@@ -189,18 +178,19 @@ Boolean MediaSession::initializeWithSDP(char const* sdpDescription) {
     char const* mStart = sdpLine;
     subsession->fSavedSDPLines = strDup(mStart);
 
-    subsession->fMediumName = strDup(mediumName);
-    delete[] mediumName;
-    subsession->fProtocolName = strDup(protocolName);
-    subsession->fRTPPayloadFormat = payloadFormat;
+	subsession->fMediumName = strDup(strMediumName.c_str());
+	subsession->fProtocolName = strDup(strProtocolName.c_str());
 
     // Process the following SDP lines, up until the next "m=":
     while (1) {
       sdpLine = nextSDPLine;
-      if (sdpLine == NULL) break; // we've reached the end
-      if (!parseSDPLine(sdpLine, nextSDPLine)) return False;
+      if (sdpLine == NULL) 
+		  break; // we've reached the end
+      if (!parseSDPLine(sdpLine, nextSDPLine)) 
+		  return False;
 
-      if (sdpLine[0] == 'm') break; // we've reached the next subsession
+      if (sdpLine[0] == 'm') 
+		  break; // we've reached the next subsession
 
       // Check for various special SDP lines that we understand:
       if (subsession->parseSDPLine_c(sdpLine)) continue;
@@ -216,32 +206,31 @@ Boolean MediaSession::initializeWithSDP(char const* sdpDescription) {
 
       // (Later, check for malformed lines, and other valid SDP lines#####)
     }
-    if (sdpLine != NULL) subsession->fSavedSDPLines[sdpLine-mStart] = '\0';
+    if (sdpLine != NULL) 
+		subsession->fSavedSDPLines[sdpLine-mStart] = '\0';
 
     // If we don't yet know the codec name, try looking it up from the
     // list of static payload types:
-    if (subsession->fCodecName == NULL) {
-      subsession->fCodecName
-	= lookupPayloadFormat(subsession->fRTPPayloadFormat,
-			      subsession->fRTPTimestampFrequency,
-			      subsession->fNumChannels);
-      if (subsession->fCodecName == NULL) {
-	char typeStr[20];
-	sprintf(typeStr, "%d", subsession->fRTPPayloadFormat);
-	envir().setResultMsg("Unknown codec name for RTP payload type ",
-			     typeStr);
-	return False;
-      }
+	if (subsession->rtpMaps[0].fCodecName == NULL) {
+		subsession->rtpMaps[0].fCodecName = lookupPayloadFormat(subsession->rtpMaps[0].fRTPPayloadFormat,
+			subsession->rtpMaps[0].fRTPTimestampFrequency,
+			subsession->rtpMaps[0].fNumChannels);
+		if (subsession->rtpMaps[0].fCodecName == NULL)
+		{
+			char typeStr[20];
+			sprintf(typeStr, "%d", subsession->rtpMaps[0].fRTPPayloadFormat);
+			envir().setResultMsg("Unknown codec name for RTP payload type ",typeStr);
+			return False;
+        }
     }
 
     // If we don't yet know this subsession's RTP timestamp frequency
     // (because it uses a dynamic payload type and the corresponding
     // SDP "rtpmap" attribute erroneously didn't specify it),
     // then guess it now:
-    if (subsession->fRTPTimestampFrequency == 0) {
-      subsession->fRTPTimestampFrequency
-	= guessRTPTimestampFrequency(subsession->fMediumName,
-				     subsession->fCodecName);
+	if (subsession->rtpMaps[0].fRTPTimestampFrequency == 0)
+	{
+		subsession->rtpMaps[0].fRTPTimestampFrequency = guessRTPTimestampFrequency(subsession->fMediumName, subsession->rtpMaps[0].fCodecName);
     }
   }
 
@@ -597,17 +586,17 @@ MediaSubsession::MediaSubsession(MediaSession& parent)
   : serverPortNum(0), sink(NULL), miscPtr(NULL),
     fParent(parent), fNext(NULL),
     fConnectionEndpointName(NULL),
-    fClientPortNum(0), fRTPPayloadFormat(0xFF),
-    fSavedSDPLines(NULL), fMediumName(NULL), fCodecName(NULL), fProtocolName(NULL),
-    fRTPTimestampFrequency(0), fMultiplexRTCPWithRTP(False), fControlPath(NULL),
+    fClientPortNum(0),
+    fSavedSDPLines(NULL), fMediumName(NULL), fProtocolName(NULL), 
+	fMultiplexRTCPWithRTP(False), fControlPath(NULL),
     fSourceFilterAddr(parent.sourceFilterAddr()), fBandwidth(0),
     fPlayStartTime(0.0), fPlayEndTime(0.0), fAbsStartTime(NULL), fAbsEndTime(NULL),
-    fVideoWidth(0), fVideoHeight(0), fVideoFPS(0), fNumChannels(1), fScale(1.0f), fNPT_PTS_Offset(0.0f),
+	fVideoWidth(0), fVideoHeight(0), fVideoFPS(0), fScale(1.0f), fNPT_PTS_Offset(0.0f), mSdpRTPMapsCount(0),
     fAttributeTable(HashTable::create(STRING_HASH_KEYS)),
     fRTPSocket(NULL), fRTCPSocket(NULL),
     fRTPSource(NULL), fRTCPInstance(NULL), fReadSource(NULL),
     fReceiveRawMP3ADUs(False), fReceiveRawJPEGFrames(False),
-    fSessionId(NULL) {
+	fSessionId(NULL), rtpMaps(NULL){
   rtpInfo.seqNum = 0; rtpInfo.timestamp = 0; rtpInfo.infoIsNew = False;
 
   // A few attributes have unusual default values.  Set these now:
@@ -617,16 +606,29 @@ MediaSubsession::MediaSubsession(MediaSession& parent)
   setAttribute("profile-id", "1"); // used with "video/H265"
   setAttribute("level-id", "93"); // used with "video/H265"
   setAttribute("interop-constraints", "B00000000000"); // used with "video/H265"
+
+  //new a default
+  mSdpRTPMapsCount = 1;
+  rtpMaps = new sdpRTPMapInfo[mSdpRTPMapsCount];
+  rtpMaps[0].fCodecName = NULL;
+  rtpMaps[0].fNumChannels = 1;
+  rtpMaps[0].fRTPPayloadFormat = 0xFF;
+  rtpMaps[0].fRTPTimestampFrequency = 0;
 }
 
 MediaSubsession::~MediaSubsession() {
   deInitiate();
 
   delete[] fConnectionEndpointName; delete[] fSavedSDPLines;
-  delete[] fMediumName; delete[] fCodecName; delete[] fProtocolName;
+  delete[] fMediumName; delete[] fProtocolName;
   delete[] fControlPath;
   delete[] fAbsStartTime; delete[] fAbsEndTime;
   delete[] fSessionId;
+
+  //delete rtpmap infos from SDP
+  for (int i = 0; i < mSdpRTPMapsCount; i++)
+	  delete[] rtpMaps[i].fCodecName;
+  delete[] rtpMaps;
 
   // Empty and delete our 'attributes table':
   SDPAttribute* attr;
@@ -677,7 +679,7 @@ Boolean MediaSubsession::initiate(int useSpecialRTPoffset) {
   if (fReadSource != NULL) return True; // has already been initiated
 
   do {
-    if (fCodecName == NULL) {
+	  if (rtpMaps[0].fCodecName == NULL) {
       env().setResultMsg("Codec is unspecified");
       break;
     }
@@ -992,6 +994,107 @@ void MediaSubsession
   (void)fAttributeTable->Add(name, newAttr);
 }
 
+std::vector<std::string> splitString(const std::string& s, const std::string& delim)
+{
+	std::vector<std::string> elems;
+	size_t pos = 0;
+	size_t len = s.length();
+	size_t delim_len = delim.length();
+	if (delim_len == 0) 
+		return elems;
+	while (pos < len)
+	{
+		int find_pos = s.find(delim, pos);
+		if (find_pos == std::string::npos)
+		{
+			elems.push_back(s.substr(pos));
+			break;
+		}
+		elems.push_back(s.substr(pos, find_pos - pos));
+		pos = find_pos + delim_len;
+	}
+	return elems;
+}
+
+Boolean MediaSubsession::parseSDPLine_m(char const* sdpLine, unsigned short& clientPort, std::string& protocolNAME, std::string& mediumNAME)
+{
+	// Parse the line as "m=<medium_name> <client_portNum> RTP/AVP <fmt> <fmt> ..."
+	// or "m=<medium_name> <client_portNum>/<num_ports> RTP/AVP <fmt> <fmt> ..."
+	// (Should we be checking for >1 payload format number here?)#####
+	char* mediumName = strDupSize(sdpLine); // ensures we have enough space
+	char const* protocolName = NULL;
+	std::string protocolString("INVALID");
+	if ((sscanf(sdpLine, "m=%s %hu RTP/AVP", mediumName, &clientPort) == 2 ||  //%hu以 unsigned short格式输出整数
+		sscanf(sdpLine, "m=%s %hu/%*u RTP/AVP", mediumName, &clientPort) == 2))
+	{
+		protocolString = "RTP/AVP";
+		protocolName = "RTP";
+	}
+	else if ((sscanf(sdpLine, "m=%s %hu UDP", mediumName, &clientPort) == 2))
+	{
+		// This is a RAW UDP source
+		protocolString = "UDP";
+		protocolName = "UDP";
+	}
+	else if ((sscanf(sdpLine, "m=%s %hu udp", mediumName, &clientPort) == 2))
+	{
+		// This is a RAW UDP source
+		protocolString = "udp";
+		protocolName = "UDP";
+	}
+	else if ((sscanf(sdpLine, "m=%s %hu RAW/RAW/UDP", mediumName, &clientPort) == 2))
+	{
+		// This is a RAW UDP source
+		protocolString = "RAW/RAW/UDP";
+		protocolName = "UDP";
+	}
+	else
+	{
+		return FALSE;
+	}
+
+	std::string copyString(sdpLine);
+	std::size_t index = copyString.find(protocolString);
+	if (index == std::string::npos)
+		return FALSE;
+	copyString = copyString.substr(index + protocolString.length());
+	if ((index = copyString.find("\r\n")) != std::string::npos)
+		copyString = copyString.substr(0,index);
+	const char* p = copyString.c_str();
+	int length = copyString.length();
+	int spaceNumbers = 0;
+	while (' ' == *p++)
+		spaceNumbers++;
+	if (spaceNumbers >= length)
+		return FALSE;
+	std::string payloadsStringTrimmed(copyString.c_str() + spaceNumbers);
+	std::vector<std::string> payloads = splitString(payloadsStringTrimmed, " ");
+	std::vector<int> validPayloads;
+	for (int i = 0; i < payloads.size(); i++)
+	{
+		unsigned char payloadFormat = atoi(payloads[i].c_str());
+		if (payloadFormat > 0 && payloadFormat <= 127)
+			validPayloads.push_back(payloadFormat);
+	}
+	if (validPayloads.empty())
+		return FALSE;
+	//create rtpMaps;
+	delete[] rtpMaps;
+	mSdpRTPMapsCount = validPayloads.size();
+	rtpMaps = new sdpRTPMapInfo[mSdpRTPMapsCount];
+	for (size_t i = 0; i < validPayloads.size(); i++)
+	{
+		rtpMaps[i].fCodecName = NULL;
+		rtpMaps[i].fNumChannels = 1;  //default to 1
+		rtpMaps[i].fRTPPayloadFormat = validPayloads[i];
+		rtpMaps[i].fRTPTimestampFrequency = 0;
+	}
+	protocolNAME = protocolName;
+	mediumNAME = mediumName;
+	delete[] mediumName;
+	return TRUE;
+}
+
 Boolean MediaSubsession::parseSDPLine_c(char const* sdpLine) {
   // Check for "c=IN IP4 <connection-endpoint>"
   // or "c=IN IP4 <connection-endpoint>/<ttl+numAddresses>"
@@ -1022,26 +1125,34 @@ Boolean MediaSubsession::parseSDPAttribute_rtpmap(char const* sdpLine) {
   char* codecName = strDupSize(sdpLine); // ensures we have enough space
   unsigned rtpTimestampFrequency = 0;
   unsigned numChannels = 1;
-  if (sscanf(sdpLine, "a=rtpmap: %u %[^/]/%u/%u",
-	     &rtpmapPayloadFormat, codecName, &rtpTimestampFrequency,
-	     &numChannels) == 4
-      || sscanf(sdpLine, "a=rtpmap: %u %[^/]/%u",
-	     &rtpmapPayloadFormat, codecName, &rtpTimestampFrequency) == 3
-      || sscanf(sdpLine, "a=rtpmap: %u %s",
-		&rtpmapPayloadFormat, codecName) == 2) {
+  if (sscanf(sdpLine, "a=rtpmap: %u %[^/]/%u/%u",&rtpmapPayloadFormat, codecName, &rtpTimestampFrequency,&numChannels) == 4
+      || sscanf(sdpLine, "a=rtpmap: %u %[^/]/%u",&rtpmapPayloadFormat, codecName, &rtpTimestampFrequency) == 3
+      || sscanf(sdpLine, "a=rtpmap: %u %s",&rtpmapPayloadFormat, codecName) == 2) 
+  {
     parseSuccess = True;
-    if (rtpmapPayloadFormat == fRTPPayloadFormat) {
-      // This "rtpmap" matches our payload format, so set our
-      // codec name and timestamp frequency:
-      // (First, make sure the codec name is upper case)
-      {
-	Locale l("POSIX");
-	for (char* p = codecName; *p != '\0'; ++p) *p = toupper(*p);
-      }
-      delete[] fCodecName; fCodecName = strDup(codecName);
-      fRTPTimestampFrequency = rtpTimestampFrequency;
-      fNumChannels = numChannels;
-    }
+	int index = -1;
+	for (int i = 0; i < mSdpRTPMapsCount; i++)
+	{
+		if (rtpMaps[i].fRTPPayloadFormat == rtpmapPayloadFormat)
+		{
+			index = i;
+			break;
+		}
+	}
+	if (-1 != index)
+	{
+		// This "rtpmap" matches our payload format, so set our
+		// codec name and timestamp frequency:
+		// (First, make sure the codec name is upper case)
+		{
+			Locale l("POSIX");
+			for (char* p = codecName; *p != '\0'; ++p) *p = toupper(*p);
+		}
+		delete[] rtpMaps[index].fCodecName;
+		rtpMaps[index].fCodecName = strDup(codecName);
+		rtpMaps[index].fRTPTimestampFrequency = rtpTimestampFrequency;
+		rtpMaps[index].fNumChannels = numChannels;
+	}
   }
   delete[] codecName;
 
@@ -1180,6 +1291,10 @@ Boolean MediaSubsession::parseSDPAttribute_framerate(char const* sdpLine) {
 }
 
 Boolean MediaSubsession::createSourceObjects(int useSpecialRTPoffset) {
+  unsigned char fRTPPayloadFormat = rtpMaps[0].fRTPPayloadFormat;
+  char* fCodecName = rtpMaps[0].fCodecName;
+  unsigned fRTPTimestampFrequency = rtpMaps[0].fRTPTimestampFrequency;
+  unsigned fNumChannels = rtpMaps[0].fNumChannels;
   do {
     // First, check "fProtocolName"
     if (strcmp(fProtocolName, "UDP") == 0) {

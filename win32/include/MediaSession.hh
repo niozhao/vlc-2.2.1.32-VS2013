@@ -54,6 +54,7 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #ifndef _FRAMED_FILTER_HH
 #include "FramedFilter.hh"
 #endif
+#include <string>
 
 class MediaSubsession; // forward
 
@@ -161,10 +162,10 @@ public:
   MediaSession const& parentSession() const { return fParent; }
 
   unsigned short clientPortNum() const { return fClientPortNum; }
-  unsigned char rtpPayloadFormat() const { return fRTPPayloadFormat; }
+  unsigned char rtpPayloadFormat() const { return rtpMaps[0].fRTPPayloadFormat; }
   char const* savedSDPLines() const { return fSavedSDPLines; }
   char const* mediumName() const { return fMediumName; }
-  char const* codecName() const { return fCodecName; }
+  char const* codecName() const { return rtpMaps[0].fCodecName; }
   char const* protocolName() const { return fProtocolName; }
   char const* controlPath() const { return fControlPath; }
   Boolean isSSM() const { return fSourceFilterAddr.s_addr != 0; }  //Source-Specific Multicast
@@ -172,13 +173,13 @@ public:
   unsigned short videoWidth() const { return fVideoWidth; }
   unsigned short videoHeight() const { return fVideoHeight; }
   unsigned videoFPS() const { return fVideoFPS; }
-  unsigned numChannels() const { return fNumChannels; }
+  unsigned numChannels() const { return rtpMaps[0].fNumChannels; }
   float& scale() { return fScale; }
   float& speed() { return fSpeed; }
 
   RTPSource* rtpSource() { return fRTPSource; }
   RTCPInstance* rtcpInstance() { return fRTCPInstance; }
-  unsigned rtpTimestampFrequency() const { return fRTPTimestampFrequency; }
+  unsigned rtpTimestampFrequency() const { return rtpMaps[0].fRTPTimestampFrequency; }
   Boolean rtcpIsMuxed() const { return fMultiplexRTCPWithRTP; }
   FramedSource* readSource() { return fReadSource; }
     // This is the source that client sinks read from.  It is usually
@@ -259,6 +260,13 @@ public:
     Boolean infoIsNew; // not part of the RTSP header; instead, set whenever this struct is filled in
   } rtpInfo;
 
+  typedef struct {
+	  unsigned char fRTPPayloadFormat;
+	  char* fCodecName;
+	  unsigned fRTPTimestampFrequency;
+	  unsigned fNumChannels;   // optionally set by "a=rtpmap:" lines for audio sessions.  Default: 1
+  } sdpRTPMapInfo;
+
   double getNormalPlayTime(struct timeval const& presentationTime);
   // Computes the stream's "Normal Play Time" (NPT) from the given "presentationTime".
   // (For the definition of "Normal Play Time", see RFC 2326, section 3.6.)
@@ -279,6 +287,7 @@ protected:
 
   void setAttribute(char const* name, char const* value = NULL, Boolean valueIsHexadecimal = False);
 
+  Boolean parseSDPLine_m(char const* sdpLine, unsigned short& clientPort, std::string& protocolNAME, std::string& mediumNAME);
   Boolean parseSDPLine_c(char const* sdpLine);
   Boolean parseSDPLine_b(char const* sdpLine);
   Boolean parseSDPAttribute_rtpmap(char const* sdpLine);
@@ -302,12 +311,11 @@ protected:
   char* fConnectionEndpointName; // may also be set by RTSP SETUP response
   unsigned short fClientPortNum; // in host byte order
       // This field is also set by initiate()
-  unsigned char fRTPPayloadFormat;
   char* fSavedSDPLines;
   char* fMediumName;
-  char* fCodecName;
+  sdpRTPMapInfo* rtpMaps;  //rtpmap infos from sdp
+  int mSdpRTPMapsCount;
   char* fProtocolName;
-  unsigned fRTPTimestampFrequency;
   Boolean fMultiplexRTCPWithRTP;
   char* fControlPath; // holds optional a=control: string
   struct in_addr fSourceFilterAddr; // used for SSM
@@ -321,8 +329,6 @@ protected:
      // screen dimensions (set by an optional a=x-dimensions: <w>,<h> line)
   unsigned fVideoFPS;
      // frame rate (set by an optional "a=framerate: <fps>" or "a=x-framerate: <fps>" line)
-  unsigned fNumChannels;
-     // optionally set by "a=rtpmap:" lines for audio sessions.  Default: 1
   float fScale; // set from a RTSP "Scale:" header
   float fSpeed;
   double fNPT_PTS_Offset; // set by "getNormalPlayTime()"; add this to a PTS to get NPT
