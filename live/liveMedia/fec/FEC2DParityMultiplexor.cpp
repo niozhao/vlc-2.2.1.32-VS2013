@@ -4,6 +4,9 @@
 #include <iostream>
 #define MAX_FEC_BUFFER_SIZE (100 * 1024)
 
+#define InterleaveIndex 0
+#define NonInterleaveIndex 1
+
 FEC2DParityMultiplexor* FEC2DParityMultiplexor::createNew(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow) {
     return new FEC2DParityMultiplexor(env, row, column, repairWindow);
 }
@@ -15,41 +18,32 @@ FEC2DParityMultiplexor::FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t r
     fRow = row;
     fColumn = column;
     hostSSRC = 0;
-	fInterleavedReorderingBuffer = NULL;
-	fNonInterleavedReorderingBuffer = NULL;
+	reordingBuffers[InterleaveIndex] = NULL;
+	reordingBuffers[NonInterleaveIndex] = NULL;
 
-	fCurrentPacketBeginsFrame = True; 
-	fCurrentPacketCompletesFrame = True; 
-	fPacketLossInFragmentedFrame = False;
-
-	fInterFECBuffer = new unsigned char[MAX_FEC_BUFFER_SIZE];
-	fNonInterFECBuffer = new unsigned char[MAX_FEC_BUFFER_SIZE];
-	resetInterFECBuffer();
-	resetNonInterFECBuffer();
+	fFECBuffers[InterleaveIndex] = new unsigned char[MAX_FEC_BUFFER_SIZE];
+	fFECBuffers[NonInterleaveIndex] = new unsigned char[MAX_FEC_BUFFER_SIZE];
+	resetFECBuffer(InterleaveIndex);
+	resetFECBuffer(NonInterleaveIndex);
 
     nextTask() = envir().taskScheduler().scheduleDelayedTask(20000, (TaskFunc*)sendNext, this);
 }
 
-void FEC2DParityMultiplexor::resetInterFECBuffer()
+void FEC2DParityMultiplexor::resetFECBuffer(int index)
 {
-	memset(fInterFECBuffer, 0, sizeof(fInterFECBuffer));
-	fInterTo = fInterFECBuffer;
-	fInterFrameSize = 0;
-	fInterMaxSize = MAX_FEC_BUFFER_SIZE;
-}
-
-void FEC2DParityMultiplexor::resetNonInterFECBuffer()
-{
-	memset(fNonInterFECBuffer, 0, sizeof(fNonInterFECBuffer));
-	fNonInterTo = fNonInterFECBuffer;
-	fNonInterFrameSize = 0;
-	fNonInterMaxSize = MAX_FEC_BUFFER_SIZE;
+	memset(fFECBuffers[index], 0, sizeof(fFECBuffers[index]));
+	pTo[index] = fFECBuffers[index];
+	frameSize[index] = 0;
+	maxSize[index] = MAX_FEC_BUFFER_SIZE;
+	currentPacketBeginsFrame[index] = True;
+	currentPacketCompletesFrame[index] = True;
+	packetLossInFragmentedFrame[index] = False;
 }
 
 void FEC2DParityMultiplexor::createReorderBuffers(BufferedPacketFactory* packetFactory)
 {
-	fInterleavedReorderingBuffer = new ReorderingPacketBuffer(NULL);
-	fNonInterleavedReorderingBuffer = new ReorderingPacketBuffer(NULL);
+	reordingBuffers[InterleaveIndex] = new ReorderingPacketBuffer(NULL);
+	reordingBuffers[NonInterleaveIndex] = new ReorderingPacketBuffer(NULL);
 }
 
 void FEC2DParityMultiplexor::setCallback(unsigned char* to, unsigned maxSize, afterGettingFunc* callBack, void* callBackData)
@@ -61,10 +55,10 @@ void FEC2DParityMultiplexor::setCallback(unsigned char* to, unsigned maxSize, af
 }
 
 FEC2DParityMultiplexor::~FEC2DParityMultiplexor() {
-	delete[] fInterFECBuffer;
-	delete[] fNonInterFECBuffer;
-	delete fInterleavedReorderingBuffer;
-	delete fNonInterleavedReorderingBuffer;
+	delete[] fFECBuffers[InterleaveIndex];
+	delete[] fFECBuffers[NonInterleaveIndex];
+	delete reordingBuffers[InterleaveIndex];
+	delete reordingBuffers[NonInterleaveIndex];
 
 	while (!fRTPPackets.empty()){
 		RTPPacket* rtpPacket = fRTPPackets.front();
@@ -77,7 +71,7 @@ FEC2DParityMultiplexor::~FEC2DParityMultiplexor() {
 	emergencyBuffer.clear();*/
 }
 
-Boolean FEC2DParityMultiplexor::processFECHeader(BufferedPacket* packet)
+Boolean FEC2DParityMultiplexor::processFECHeader(BufferedPacket* packet, Boolean* startFlag, Boolean* endFlag)
 {
 	unsigned char* headerStart = packet->data();
 	unsigned packetSize = packet->dataSize();
@@ -91,10 +85,10 @@ Boolean FEC2DParityMultiplexor::processFECHeader(BufferedPacket* packet)
 	unsigned char startBit = headerStart[12 + 12] & 0x01;  
 	unsigned char endBit = headerStart[12 + 12] & 0x02;  
 
-	fCurrentPacketBeginsFrame = (startBit != 0);
-	fCurrentPacketCompletesFrame = (endBit != 0);
+	*startFlag = (startBit != 0);
+	*endFlag = (endBit != 0);
 
-	if (!fCurrentPacketBeginsFrame)
+	if (!*startFlag)
 		packet->skip(12 + 16);
 
 	return True;
@@ -110,19 +104,24 @@ Boolean FEC2DParityMultiplexor::processFECHeader(BufferedPacket* packet)
   * fCurrentPacketCompletesFrame： 标志当前RTP包是一个冗余包的最后一片
   *
   * 拼完整包的方法：以Interleaved为例
-  * 将第一片RTP包数据拷贝至fInterFECBuffer，offset = 0；
-  * 将第二片RTP包数据拷贝至fInterFECBuffer，offset = sizeof（第一个RTP包）
+  * 将第一片RTP包数据拷贝至fFECBuffers[index]，offset = 0；
+  * 将第二片RTP包数据拷贝至fFECBuffers[index]，offset = sizeof（第一个RTP包）
   * ...拷贝最后一个包
   *
   *
 *******************************/
-void FEC2DParityMultiplexor::preProcessFECPacket(bool bInterleave, BufferedPacket* srcPacket)
+void FEC2DParityMultiplexor::preProcessFECPacket(int index, BufferedPacket* srcPacket)
 {
-	ReorderingPacketBuffer* currentReorderBuffer = bInterleave ? fInterleavedReorderingBuffer : fNonInterleavedReorderingBuffer;
-	unsigned char* fCurrentFECBuffer = bInterleave ? fInterFECBuffer : fNonInterFECBuffer;
-	unsigned char **fCurrentTo = bInterleave ? &fInterTo : &fNonInterTo;
-	unsigned* fCurrentFrameSize = bInterleave ? &fInterFrameSize : &fNonInterFrameSize;
-	unsigned* fCurrentMaxSize = bInterleave ? &fInterMaxSize : &fNonInterMaxSize;
+	if (index > 1)
+		return;
+	ReorderingPacketBuffer* currentReorderBuffer = reordingBuffers[index];
+	unsigned char* fCurrentFECBuffer = fFECBuffers[index];
+	unsigned char **fCurrentTo = &pTo[index];
+	unsigned* fCurrentFrameSize = &frameSize[index];
+	unsigned* fCurrentMaxSize = &maxSize[index];
+	Boolean* pCurrentPacketBeginsFrame = &currentPacketBeginsFrame[index];
+	Boolean* pCurrentPacketLossInFragmentedFrame = &packetLossInFragmentedFrame[index];
+	Boolean* pCurrentPacketCompletesFrame = &currentPacketCompletesFrame[index];
 
 
 	BufferedPacket* bPacket = currentReorderBuffer->getFreePacket(NULL);
@@ -134,7 +133,7 @@ void FEC2DParityMultiplexor::preProcessFECPacket(bool bInterleave, BufferedPacke
 	unsigned short rtpSeqNo = (unsigned short)(rtpHdr & 0xFFFF);
 	struct timeval timeNow;
 	gettimeofday(&timeNow, NULL);
-	bPacket->assignMiscParams(rtpSeqNo, 0, timeNow, 0, 0, timeNow);  //这里只关心seqNo。
+	bPacket->assignMiscParams(rtpSeqNo, 0, timeNow, 0, 0, timeNow);  //这里只关心seqNo及currentTime。
 
 	bool bSucceed = currentReorderBuffer->storePacket(bPacket);
 	if (!bSucceed)
@@ -149,23 +148,23 @@ void FEC2DParityMultiplexor::preProcessFECPacket(bool bInterleave, BufferedPacke
 				break;
 			fNeedDelivery = False;
 			if (nextPacket->useCount() == 0) {
-				if (!processFECHeader(nextPacket)) {
+				if (!processFECHeader(nextPacket, pCurrentPacketBeginsFrame, pCurrentPacketCompletesFrame)) {
 					currentReorderBuffer->releaseUsedPacket(nextPacket);
 					fNeedDelivery = True;
 					continue;
 				}
 			}
-			if (fCurrentPacketBeginsFrame) {
-				if (packetLossPrecededThis || fPacketLossInFragmentedFrame) {  //当前这个rtp包是一帧的开始[开始新的一帧了]，若packetLossPrecededThis为true，表示先前有rtp包丢了，那么之前保存的数据全都不要了
+			if (*pCurrentPacketBeginsFrame) {
+				if (packetLossPrecededThis || *pCurrentPacketLossInFragmentedFrame) {  //当前这个rtp包是一帧的开始[开始新的一帧了]，若packetLossPrecededThis为true，表示先前有rtp包丢了，那么之前保存的数据全都不要了
 					*fCurrentTo = fCurrentFECBuffer;  //让fCurrentTo指向buffer起始地址
 					*fCurrentFrameSize = 0;
 				}
-				fPacketLossInFragmentedFrame = False;
+				*pCurrentPacketLossInFragmentedFrame = False;
 			}
 			else if (packetLossPrecededThis) {
-				fPacketLossInFragmentedFrame = True;  //fCurrentPacketBeginsFrame 为false，则该rtp包是一帧数据的中间部分，但先前有包丢失了，所以拼不成一个完整帧了
+				*pCurrentPacketLossInFragmentedFrame = True;  //fCurrentPacketBeginsFrame 为false，则该rtp包是一帧数据的中间部分，但先前有包丢失了，所以拼不成一个完整帧了
 			}
-			if (fPacketLossInFragmentedFrame) {
+			if (*pCurrentPacketLossInFragmentedFrame) {
 				currentReorderBuffer->releaseUsedPacket(nextPacket);
 				fNeedDelivery = True;
 				continue;
@@ -192,14 +191,14 @@ void FEC2DParityMultiplexor::preProcessFECPacket(bool bInterleave, BufferedPacke
 			}
 
 
-			if (fCurrentPacketCompletesFrame && fFrameSize > 0) {
+			if (*pCurrentPacketCompletesFrame && fFrameSize > 0) {
 				if (bytesTruncated > 0) {
 					//error! some data will dropped!
 					DebugPrintf("FEC2DParityMultiplexor the total received frame size exceeds the client's buffer size:%d.%d bytes of trailing data will be dropped!\n", (int)MAX_FEC_BUFFER_SIZE, bytesTruncated);
 				}
 				pushFECRTPPacket(fCurrentFECBuffer, *fCurrentFrameSize);
 				//DebugPrintf("succeed get %d, size:%u, seqenceNum:%u\n", bInterleave ? 116 : 115, *fCurrentFrameSize, (unsigned)((((u_int16_t)fCurrentFECBuffer[20]) << 8) | fCurrentFECBuffer[21]));
-				bInterleave ? resetInterFECBuffer() : resetNonInterFECBuffer();
+				resetFECBuffer(index);
 			}
 			else {
 				*fCurrentTo += frameSize;
@@ -216,12 +215,12 @@ void FEC2DParityMultiplexor::pushFECRTPPacket(BufferedPacket* srcPacket)
 	if (payload == 115)
 	{
 		//DebugPrintf("receive: %d, size:%d, seq: %u, start :%d, end :%d\n", payload, srcPacket->dataSize(), (unsigned)((((u_int16_t)srcPacket->data()[20]) << 8) | srcPacket->data()[21]), srcPacket->data()[12 + 12] & 0x01, srcPacket->data()[12 + 12] & 0x02);
-		preProcessFECPacket(false, srcPacket);
+		preProcessFECPacket(NonInterleaveIndex, srcPacket);
 	}
 	else if (payload == 116)
 	{
 		//DebugPrintf("receive: %d, size:%d, seq: %u, start :%d, end :%d\n", payload, srcPacket->dataSize(), (unsigned)((((u_int16_t)srcPacket->data()[20]) << 8) | srcPacket->data()[21]), srcPacket->data()[12 + 12] & 0x01, srcPacket->data()[12 + 12] & 0x02);
-		preProcessFECPacket(true, srcPacket);
+		preProcessFECPacket(InterleaveIndex, srcPacket);
 	}
 	else if (96 == payload)
 	{

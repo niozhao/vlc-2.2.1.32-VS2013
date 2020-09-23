@@ -48,10 +48,9 @@ private:
 
     void printSuperBuffer();
 
-	Boolean processFECHeader(BufferedPacket* packet);
-	void resetInterFECBuffer();
-	void resetNonInterFECBuffer();
-	void preProcessFECPacket(bool bInterleave, BufferedPacket* srcPacket);  //true for bInterleave, false for NonInterleave
+	Boolean processFECHeader(BufferedPacket* packet, Boolean* startFlag, Boolean* endFlag);
+	void resetFECBuffer(int index);
+	void preProcessFECPacket(int index, BufferedPacket* srcPacket);  //true for bInterleave, false for NonInterleave
 
 private:
     long long fRepairWindow;
@@ -62,23 +61,13 @@ private:
     u_int8_t fRow;
     u_int8_t fColumn;
 
-	ReorderingPacketBuffer* fInterleavedReorderingBuffer;
-	ReorderingPacketBuffer* fNonInterleavedReorderingBuffer;
-	Boolean fCurrentPacketBeginsFrame;
-	Boolean fPacketLossInFragmentedFrame;
-	Boolean fCurrentPacketCompletesFrame;
-
-	//for Interleave
-	unsigned char* fInterFECBuffer;   //拼接的完整Interleave冗余包将会放在这里 
-	unsigned fInterMaxSize; //fInterFECBuffer 可用的空间大小
-	unsigned char *fInterTo; // fInterTo = fInterFECBuffer + offset
-	unsigned fInterFrameSize;  //Interleave冗余包的大小
-
-	//for NonInterleave
-	unsigned char* fNonInterFECBuffer;
-	unsigned fNonInterMaxSize; // in
-	unsigned char *fNonInterTo; // in
-	unsigned fNonInterFrameSize; // out
-
+	ReorderingPacketBuffer* reordingBuffers[2];
+	unsigned char* fFECBuffers[2];    //拼接的完整Interleave/NonInterleave冗余包将会放在这里
+	unsigned maxSize[2];  //fFECBuffer 可用的空间大小
+	unsigned char* pTo[2];  // pTo = fFECBuffers + offset
+	unsigned frameSize[2];  //冗余包的大小
+	Boolean currentPacketBeginsFrame[2];
+	Boolean packetLossInFragmentedFrame[2];
+	Boolean currentPacketCompletesFrame[2];
 };
 #endif
