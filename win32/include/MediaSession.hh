@@ -167,7 +167,7 @@ public:
   char const* codecName() const { return fCodecName; }
   char const* protocolName() const { return fProtocolName; }
   char const* controlPath() const { return fControlPath; }
-  Boolean isSSM() const { return fSourceFilterAddr.s_addr != 0; }
+  Boolean isSSM() const { return fSourceFilterAddr.s_addr != 0; }  //Source-Specific Multicast
 
   unsigned short videoWidth() const { return fVideoWidth; }
   unsigned short videoHeight() const { return fVideoHeight; }

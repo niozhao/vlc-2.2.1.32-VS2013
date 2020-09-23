@@ -22,44 +22,8 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #include "MultiFramedRTPSource.hh"
 #include "RTCP.hh"
 #include "GroupsockHelper.hh"
+#include "FEC2DParityMultiplexor.hh"
 #include <string.h>
-
-////////// ReorderingPacketBuffer definition //////////
-
-class ReorderingPacketBuffer {
-public:
-  ReorderingPacketBuffer(BufferedPacketFactory* packetFactory);
-  virtual ~ReorderingPacketBuffer();
-  void reset();
-
-  BufferedPacket* getFreePacket(MultiFramedRTPSource* ourSource);
-  Boolean storePacket(BufferedPacket* bPacket);
-  BufferedPacket* getNextCompletedPacket(Boolean& packetLossPreceded);
-  void releaseUsedPacket(BufferedPacket* packet);
-  void freePacket(BufferedPacket* packet) {
-    if (packet != fSavedPacket) {
-      delete packet;
-    } else {
-      fSavedPacketFree = True;
-    }
-  }
-  Boolean isEmpty() const { return fHeadPacket == NULL; }
-
-  void setThresholdTime(unsigned uSeconds) { fThresholdTime = uSeconds; }
-  void resetHaveSeenFirstPacket() { fHaveSeenFirstPacket = False; }
-
-private:
-  BufferedPacketFactory* fPacketFactory;
-  unsigned fThresholdTime; // uSeconds
-  Boolean fHaveSeenFirstPacket; // used to set initial "fNextExpectedSeqNo"
-  unsigned short fNextExpectedSeqNo;
-  BufferedPacket* fHeadPacket;
-  BufferedPacket* fTailPacket;
-  BufferedPacket* fSavedPacket;
-      // to avoid calling new/free in the common case
-  Boolean fSavedPacketFree;
-};
-
 
 ////////// MultiFramedRTPSource implementation //////////
 
@@ -71,7 +35,15 @@ MultiFramedRTPSource
   : RTPSource(env, RTPgs, rtpPayloadFormat, rtpTimestampFrequency) {
   reset();
   fReorderingBuffer = new ReorderingPacketBuffer(packetFactory);
-
+  memset(pFECBuffer, 0, sizeof(pFECBuffer));
+  pFEC = NULL;
+  bool isVideo = rtpPayloadFormat == 96;
+  if (false)
+  {
+	  pFEC = FEC2DParityMultiplexor::createNew(env, 6, 6, 300);
+	  pFEC->createReorderBuffers(packetFactory);
+	  pFEC->setCallback(pFECBuffer, sizeof(pFECBuffer), fecPacketReady, this);
+  }
   // Try to use a big receive buffer for RTP:
   increaseReceiveBufferTo(env, RTPgs->socketNum(), 50*1024);
 }
@@ -87,6 +59,7 @@ void MultiFramedRTPSource::reset() {
 
 MultiFramedRTPSource::~MultiFramedRTPSource() {
   delete fReorderingBuffer;
+  delete pFEC;
 }
 
 Boolean MultiFramedRTPSource
@@ -134,7 +107,7 @@ void MultiFramedRTPSource::doGetNextFrame() {
 void MultiFramedRTPSource::doGetNextFrame1() {
   while (fNeedDelivery) {
     // If we already have packet data available, then deliver it now.
-    Boolean packetLossPrecededThis;
+    Boolean packetLossPrecededThis;  //packetLossPrecededThis 表示什么意思？若为true表示在这个rtp包之前有包丢失了。
     BufferedPacket* nextPacket
       = fReorderingBuffer->getNextCompletedPacket(packetLossPrecededThis);
     if (nextPacket == NULL) break;
@@ -146,10 +119,10 @@ void MultiFramedRTPSource::doGetNextFrame1() {
       // that needs to be processed:
       unsigned specialHeaderSize;
       if (!processSpecialHeader(nextPacket, specialHeaderSize)) {
-	// Something's wrong with the header; reject the packet:
-	fReorderingBuffer->releaseUsedPacket(nextPacket);
-	fNeedDelivery = True;
-	continue;
+		// Something's wrong with the header; reject the packet:
+		fReorderingBuffer->releaseUsedPacket(nextPacket);
+		fNeedDelivery = True;
+		continue;
       }
       nextPacket->skip(specialHeaderSize);
     }
@@ -157,16 +130,16 @@ void MultiFramedRTPSource::doGetNextFrame1() {
     // Check whether we're part of a multi-packet frame, and whether
     // there was packet loss that would render this packet unusable:
     if (fCurrentPacketBeginsFrame) {
-      if (packetLossPrecededThis || fPacketLossInFragmentedFrame) {
-	// We didn't get all of the previous frame.
-	// Forget any data that we used from it:
-	fTo = fSavedTo; fMaxSize = fSavedMaxSize;
-	fFrameSize = 0;
+      if (packetLossPrecededThis || fPacketLossInFragmentedFrame) {  //当前这个rtp包是一帧的开始[开始新的一帧了]，若packetLossPrecededThis为true，表示先前有rtp包丢了，那么之前保存的数据全都不要了
+		// We didn't get all of the previous frame.
+		// Forget any data that we used from it:
+		fTo = fSavedTo; fMaxSize = fSavedMaxSize;
+		fFrameSize = 0;
       }
       fPacketLossInFragmentedFrame = False;
     } else if (packetLossPrecededThis) {
       // We're in a multi-packet frame, with preceding packet loss
-      fPacketLossInFragmentedFrame = True;
+      fPacketLossInFragmentedFrame = True;  //该rtp包是一帧数据的中间部分，但先前有包丢失了，所以拼不成一个完整帧了
     }
     if (fPacketLossInFragmentedFrame) {
       // This packet is unusable; reject it:
@@ -191,20 +164,20 @@ void MultiFramedRTPSource::doGetNextFrame1() {
     if (fCurrentPacketCompletesFrame && fFrameSize > 0) {
       // We have all the data that the client wants.
       if (fNumTruncatedBytes > 0) {
-	envir() << "MultiFramedRTPSource::doGetNextFrame1(): The total received frame size exceeds the client's buffer size ("
+		envir() << "MultiFramedRTPSource::doGetNextFrame1(): The total received frame size exceeds the client's buffer size ("
 		<< fSavedMaxSize << ").  "
 		<< fNumTruncatedBytes << " bytes of trailing data will be dropped!\n";
       }
       // Call our own 'after getting' function, so that the downstream object can consume the data:
       if (fReorderingBuffer->isEmpty()) {
-	// Common case optimization: There are no more queued incoming packets, so this code will not get
-	// executed again without having first returned to the event loop.  Call our 'after getting' function
-	// directly, because there's no risk of a long chain of recursion (and thus stack overflow):
-	afterGetting(this);
+		// Common case optimization: There are no more queued incoming packets, so this code will not get
+		// executed again without having first returned to the event loop.  Call our 'after getting' function
+		// directly, because there's no risk of a long chain of recursion (and thus stack overflow):
+		afterGetting(this);
       } else {
-	// Special case: Call our 'after getting' function via the event loop.
-	nextTask() = envir().taskScheduler().scheduleDelayedTask(0,
-								 (TaskFunc*)FramedSource::afterGetting, this);
+		// Special case: Call our 'after getting' function via the event loop.
+		nextTask() = envir().taskScheduler().scheduleDelayedTask(0,
+									 (TaskFunc*)FramedSource::afterGetting, this);
       }
     } else {
       // This packet contained fragmented data, and does not complete
@@ -227,37 +200,132 @@ void MultiFramedRTPSource::networkReadHandler(MultiFramedRTPSource* source, int 
 }
 
 void MultiFramedRTPSource::networkReadHandler1() {
-  BufferedPacket* bPacket = fPacketReadInProgress;
-  if (bPacket == NULL) {
-    // Normal case: Get a free BufferedPacket descriptor to hold the new network packet:
-    bPacket = fReorderingBuffer->getFreePacket(this);
-  }
+	BufferedPacket* bPacket = fPacketReadInProgress;
+	if (bPacket == NULL) {
+		// Normal case: Get a free BufferedPacket descriptor to hold the new network packet:
+		bPacket = fReorderingBuffer->getFreePacket(this);
+	}
 
-  // Read the network packet, and perform sanity checks on the RTP header:
-  Boolean readSuccess = False;
-  do {
-    struct sockaddr_in fromAddress;
-    Boolean packetReadWasIncomplete = fPacketReadInProgress != NULL;
-    if (!bPacket->fillInData(fRTPInterface, fromAddress, packetReadWasIncomplete)) {
-      if (bPacket->bytesAvailable() == 0) { // should not happen??
-	envir() << "MultiFramedRTPSource internal error: Hit limit when reading incoming packet over TCP\n";
-      }
-      fPacketReadInProgress = NULL;
-      break;
-    }
-    if (packetReadWasIncomplete) {
-      // We need additional read(s) before we can process the incoming packet:
-      fPacketReadInProgress = bPacket;
-      return;
-    } else {
-      fPacketReadInProgress = NULL;
-    }
+	// Read the network packet, and perform sanity checks on the RTP header:
+	Boolean bReleasePacket = TRUE;
+	do {
+		Boolean packetReadWasIncomplete = fPacketReadInProgress != NULL;
+		if (!bPacket->fillInData(fRTPInterface, fFromAddress, packetReadWasIncomplete)) {
+			if (bPacket->bytesAvailable() == 0) { // should not happen??
+				envir() << "MultiFramedRTPSource internal error: Hit limit when reading incoming packet over TCP\n";
+			}
+			fPacketReadInProgress = NULL;
+			break;
+		}
+		if (packetReadWasIncomplete) {
+			// We need additional read(s) before we can process the incoming packet:
+			fPacketReadInProgress = bPacket;
+			return;
+		}
+		else {
+			fPacketReadInProgress = NULL;
+		}
 #ifdef TEST_LOSS
-    setPacketReorderingThresholdTime(0);
-       // don't wait for 'lost' packets to arrive out-of-order later
-    if ((our_random()%10) == 0) break; // simulate 10% packet loss
+		setPacketReorderingThresholdTime(0);
+		// don't wait for 'lost' packets to arrive out-of-order later
+		if ((our_random()%10) == 0) break; // simulate 10% packet loss
 #endif
+		//send packet to FEC Module
+		if (pFEC)
+		{
+			bool bCheckRTP = checkPRTHeader(bPacket);
+			bReleasePacket = TRUE;
+			if (bCheckRTP)
+				pFEC->pushFECRTPPacket(bPacket);
+			else
+			{
+				//rtp header check failed! release packet later
+			}
+		}
+		else
+		{
+			bReleasePacket = FALSE;
+			parseRTPPacket(bPacket);
+		}
+	} while (0);
+	if (bReleasePacket)
+		fReorderingBuffer->freePacket(bPacket);
+}
 
+void MultiFramedRTPSource::fecPacketReady(void* clientData, unsigned frameSize,
+	unsigned numTruncatedBytes,
+struct timeval presentationTime,
+	unsigned durationInMicroseconds)
+{
+	MultiFramedRTPSource* pThis = (MultiFramedRTPSource*)clientData;
+	pThis->fecPacketReady1(frameSize, numTruncatedBytes, presentationTime, durationInMicroseconds);
+}
+
+void MultiFramedRTPSource::fecPacketReady1(unsigned frameSize,unsigned numTruncatedBytes,
+       struct timeval presentationTime,
+	   unsigned durationInMicroseconds)
+{
+	BufferedPacket* bPacket = fReorderingBuffer->getFreePacket(this);
+	bPacket->reset();
+	bPacket->appendData(pFECBuffer, frameSize);
+	parseRTPPacket(bPacket);
+}
+
+bool MultiFramedRTPSource::checkPRTHeader(BufferedPacket *bPacket)
+{
+	bool bSimpleCheckOK = false;
+	do{
+		// Check for the 12-byte RTP header:
+		if (bPacket->dataSize() < 12) 
+			break;
+		unsigned rtpHdr = ntohl(*(u_int32_t*)(bPacket->data())); 
+		Boolean rtpMarkerBit = (rtpHdr & 0x00800000) != 0;
+		unsigned rtpTimestamp = ntohl(*(u_int32_t*)(bPacket->data())); 
+		unsigned rtpSSRC = ntohl(*(u_int32_t*)(bPacket->data()));
+
+		// Check the RTP version number (it should be 2):
+		if ((rtpHdr & 0xC0000000) != 0x80000000) 
+			break;
+
+		// Check the Payload Type.
+		unsigned char rtpPayloadType = (unsigned char)((rtpHdr & 0x007F0000) >> 16);
+		if (rtpPayloadType != rtpPayloadFormat() && rtpPayloadType != 115 && rtpPayloadType != 116)
+			break;
+
+		// Skip over any CSRC identifiers in the header:
+		unsigned cc = (rtpHdr >> 24) & 0x0F;
+		if (bPacket->dataSize() < cc * 4) 
+			break;
+
+		// Check for (& ignore) any RTP header extension
+		if (rtpHdr & 0x10000000) {
+			if (bPacket->dataSize() < 4) 
+				break;
+			unsigned extHdr = ntohl(*(u_int32_t*)(bPacket->data()));
+			unsigned remExtSize = 4 * (extHdr & 0xFFFF);
+			if (bPacket->dataSize() < remExtSize) 
+				break;
+		}
+
+		// Discard any padding bytes:
+		if (rtpHdr & 0x20000000) {
+			if (bPacket->dataSize() == 0) 
+				break;
+			unsigned numPaddingBytes
+				= (unsigned)(bPacket->data())[bPacket->dataSize() - 1];
+			if (bPacket->dataSize() < numPaddingBytes) 
+				break;
+		}
+		bSimpleCheckOK = true;
+	} while (0);
+
+	return bSimpleCheckOK;
+}
+
+void MultiFramedRTPSource::parseRTPPacket(BufferedPacket *bPacket)
+{
+	Boolean readSuccess = FALSE;
+	do {
     // Check for the 12-byte RTP header:
     if (bPacket->dataSize() < 12) break;
     unsigned rtpHdr = ntohl(*(u_int32_t*)(bPacket->data())); ADVANCE(4);
@@ -273,10 +341,10 @@ void MultiFramedRTPSource::networkReadHandler1() {
     if (rtpPayloadType != rtpPayloadFormat()) {
       if (fRTCPInstanceForMultiplexedRTCPPackets != NULL
 	  && rtpPayloadType >= 64 && rtpPayloadType <= 95) {
-	// This is a multiplexed RTCP packet, and we've been asked to deliver such packets.
-	// Do so now:
-	fRTCPInstanceForMultiplexedRTCPPackets
-	  ->injectReport(bPacket->data()-12, bPacket->dataSize()+12, fromAddress);
+		// This is a multiplexed RTCP packet, and we've been asked to deliver such packets.
+		// Do so now: 
+		fRTCPInstanceForMultiplexedRTCPPackets
+			->injectReport(bPacket->data() - 12, bPacket->dataSize() + 12, fFromAddress);
       }
       break;
     }

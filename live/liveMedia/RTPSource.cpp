@@ -58,6 +58,7 @@ RTPSource::RTPSource(UsageEnvironment& env, Groupsock* RTPgs,
     fRTPPayloadFormat(rtpPayloadFormat), fTimestampFrequency(rtpTimestampFrequency),
     fSSRC(our_random32()), fEnableRTCPReports(True) {
   fReceptionStatsDB = new RTPReceptionStatsDB();
+  memset(&fFromAddress, 0, sizeof(fFromAddress));
 }
 
 RTPSource::~RTPSource() {

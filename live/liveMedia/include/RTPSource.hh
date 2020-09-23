@@ -98,6 +98,7 @@ protected:
   Boolean fCurPacketHasBeenSynchronizedUsingRTCP;
   u_int32_t fLastReceivedSSRC;
   class RTCPInstance* fRTCPInstanceForMultiplexedRTCPPackets;
+  struct sockaddr_in fFromAddress;
 
 private:
   // redefined virtual functions:

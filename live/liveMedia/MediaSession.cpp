@@ -135,7 +135,7 @@ Boolean MediaSession::initializeWithSDP(char const* sdpDescription) {
     char* mediumName = strDupSize(sdpLine); // ensures we have enough space
     char const* protocolName = NULL;
     unsigned payloadFormat;
-    if ((sscanf(sdpLine, "m=%s %hu RTP/AVP %u",
+    if ((sscanf(sdpLine, "m=%s %hu RTP/AVP %u",         //%hu以 unsigned short格式输出整数
 		mediumName, &subsession->fClientPortNum, &payloadFormat) == 3 ||
 	 sscanf(sdpLine, "m=%s %hu/%*u RTP/AVP %u",
 		mediumName, &subsession->fClientPortNum, &payloadFormat) == 3)
