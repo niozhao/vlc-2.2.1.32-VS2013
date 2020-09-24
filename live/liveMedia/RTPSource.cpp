@@ -20,6 +20,7 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 
 #include "RTPSource.hh"
 #include "GroupsockHelper.hh"
+#include "FEC2DParityMultiplexor.hh"
 
 ////////// RTPSource //////////
 
@@ -54,15 +55,86 @@ RTPSource::RTPSource(UsageEnvironment& env, Groupsock* RTPgs,
   : FramedSource(env),
     fRTPInterface(this, RTPgs),
     fCurPacketHasBeenSynchronizedUsingRTCP(False), fLastReceivedSSRC(0),
-    fRTCPInstanceForMultiplexedRTCPPackets(NULL),
+	fRTCPInstanceForMultiplexedRTCPPackets(NULL), pFECInstance(NULL), pFECInfo(NULL),
+	mRow(0), mColumn(0), mRepairWindow(0), mFECInfoCount(0),
     fRTPPayloadFormat(rtpPayloadFormat), fTimestampFrequency(rtpTimestampFrequency),
     fSSRC(our_random32()), fEnableRTCPReports(True) {
   fReceptionStatsDB = new RTPReceptionStatsDB();
   memset(&fFromAddress, 0, sizeof(fFromAddress));
+  memset(pFECBuffer, 0, sizeof(pFECBuffer));
 }
 
 RTPSource::~RTPSource() {
+  releaseFECInfo();
   delete fReceptionStatsDB;
+  delete pFECInstance;
+}
+
+void RTPSource::setFECParameter(int row, int column, int repairWindow)
+{
+	mRow = row;
+	mColumn = column;
+	mRepairWindow = repairWindow;
+}
+
+void RTPSource::setFECInfo(FECInfo* pInfo, int count)
+{
+	releaseFECInfo();
+	mFECInfoCount = count;
+	pFECInfo = new FECInfo[mFECInfoCount];
+	for (int i = 0; i < mFECInfoCount; i++)
+	{
+		pFECInfo[i].fPayloadFormat = pInfo[i].fPayloadFormat;
+		pFECInfo[i].fTimestampFrequency = pInfo[i].fTimestampFrequency;
+		pFECInfo[i].fNumChannels = pInfo[i].fNumChannels;
+		pFECInfo[i].fCodecName = strDupSize(pInfo[i].fCodecName);
+	}	
+}
+
+void RTPSource::releaseFECInfo()
+{
+	for (int i = 0; i < mFECInfoCount; i++)
+	{
+		delete[] pFECInfo[i].fCodecName;
+		pFECInfo[i].fCodecName = NULL;
+	}
+	delete[] pFECInfo;
+	pFECInfo = NULL;
+	mFECInfoCount = 0;
+}
+
+void RTPSource::enableFEC(bool bEnable)
+{
+	if (bEnable)
+	{
+		if (pFECInstance)
+			delete pFECInstance;
+		pFECInstance = NULL;
+		if (2 == mFECInfoCount && true/*fCodecName == FEC2DParityMultiplexor */)
+		{
+			pFECInstance = FEC2DParityMultiplexor::createNew(envir(), mRow, mColumn, mRepairWindow, pFECInfo[0].fPayloadFormat, pFECInfo[1].fPayloadFormat);
+			pFECInstance->createReorderBuffers();
+			pFECInstance->setCallback(pFECBuffer, sizeof(pFECBuffer), fecPacketReady, this);
+		}
+	}
+	else
+	{
+		delete pFECInstance;
+		pFECInstance = NULL;
+	}
+}
+
+void RTPSource::fecPacketReady(void* clientData, unsigned frameSize,
+	unsigned numTruncatedBytes,struct timeval presentationTime,unsigned durationInMicroseconds)
+{
+	RTPSource* pThis = (RTPSource*)clientData;
+	pThis->fecPacketReady1(frameSize, numTruncatedBytes, presentationTime, durationInMicroseconds);
+}
+
+void RTPSource::fecPacketReady1(unsigned frameSize, unsigned numTruncatedBytes,
+    struct timeval presentationTime,unsigned durationInMicroseconds)
+{
+    //virtual, derived classes do things!
 }
 
 void RTPSource::getAttributes() const {

@@ -13,12 +13,12 @@ class BufferedPacketFactory;
 
 class FEC2DParityMultiplexor : public FECMultiplexor {
 public:
-    static FEC2DParityMultiplexor* createNew(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow);
-    FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow);
+	static FEC2DParityMultiplexor* createNew(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow/* unit: ms*/, u_int8_t interleavePayload, u_int8_t nonInterleavePayload);
+	FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow/* unit: ms*/, u_int8_t interleavePayload, u_int8_t nonInterleavePayload);
     ~FEC2DParityMultiplexor();
     void pushFECRTPPacket(unsigned char* buffer, unsigned bufferSize);
 	void pushFECRTPPacket(BufferedPacket* packet);
-	void createReorderBuffers(BufferedPacketFactory* packetFactory);
+	void createReorderBuffers(BufferedPacketFactory* packetFactory = NULL);
 	void setCallback(unsigned char* to, unsigned maxSize, afterGettingFunc*, void*);
 
 public:
@@ -60,6 +60,8 @@ private:
 
     u_int8_t fRow;
     u_int8_t fColumn;
+	u_int8_t fInterleavePayloadFormat;
+	u_int8_t fNonInterleavePayloadFormat;
 
 	ReorderingPacketBuffer* reordingBuffers[2];
 	unsigned char* fFECBuffers[2];    //拼接的完整Interleave/NonInterleave冗余包将会放在这里

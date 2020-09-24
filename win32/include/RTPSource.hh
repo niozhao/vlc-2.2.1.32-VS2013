@@ -29,6 +29,16 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #endif
 
 class RTPReceptionStatsDB; // forward
+class FEC2DParityMultiplexor;
+#define MAX_FEC_PACKET_SIZE 10000
+
+typedef struct FECInfo
+{
+	unsigned char fPayloadFormat;
+	char* fCodecName;             //÷∏∂®À„∑®£¨not-use now
+	unsigned fTimestampFrequency;  //not-use now
+	unsigned fNumChannels;   // optionally set by "a=rtpmap:" lines for audio sessions.  Default: 1
+}FECInfo;
 
 class RTPSource: public FramedSource {
 public:
@@ -66,6 +76,10 @@ public:
   Boolean& enableRTCPReports() { return fEnableRTCPReports; }
   Boolean const& enableRTCPReports() const { return fEnableRTCPReports; }
 
+  void enableFEC(bool bEnable);
+  void setFECInfo(FECInfo* pInfo, int count);
+  void setFECParameter(int row, int column, int repairWindow);
+
   void setStreamSocket(int sockNum, unsigned char streamChannelId) {
     // hack to allow sending RTP over TCP (RFC 2236, section 10.12)
     fRTPInterface.setStreamSocket(sockNum, streamChannelId);
@@ -89,6 +103,11 @@ protected:
 	    unsigned char rtpPayloadFormat, u_int32_t rtpTimestampFrequency);
       // abstract base class
   virtual ~RTPSource();
+  virtual void fecPacketReady1(unsigned int, unsigned int, struct timeval, unsigned int);
+
+private:
+	void releaseFECInfo();
+	static void fecPacketReady(void *, unsigned int, unsigned int, struct timeval, unsigned int);
 
 protected:
   RTPInterface fRTPInterface;
@@ -98,6 +117,9 @@ protected:
   Boolean fCurPacketHasBeenSynchronizedUsingRTCP;
   u_int32_t fLastReceivedSSRC;
   class RTCPInstance* fRTCPInstanceForMultiplexedRTCPPackets;
+  struct sockaddr_in fFromAddress;
+  unsigned char pFECBuffer[MAX_FEC_PACKET_SIZE];
+  FEC2DParityMultiplexor* pFECInstance;
 
 private:
   // redefined virtual functions:
@@ -111,6 +133,13 @@ private:
   Boolean fEnableRTCPReports; // whether RTCP "RR" reports should be sent for this source (default: True)
 
   RTPReceptionStatsDB* fReceptionStatsDB;
+
+  //for FEC
+  int mRow;
+  int mColumn;
+  int mRepairWindow;
+  FECInfo* pFECInfo;
+  int mFECInfoCount;
 };
 
 

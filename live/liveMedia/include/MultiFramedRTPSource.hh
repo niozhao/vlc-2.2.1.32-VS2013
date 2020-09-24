@@ -28,8 +28,6 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 
 class BufferedPacket; // forward
 class BufferedPacketFactory; // forward
-class FEC2DParityMultiplexor;
-#define MAX_FEC_PACKET_SIZE 10000
 
 class MultiFramedRTPSource: public RTPSource {
 protected:
@@ -48,6 +46,7 @@ protected:
   virtual Boolean packetIsUsableInJitterCalculation(unsigned char* packet,
 						    unsigned packetSize);
       // The default implementation returns True, but this can be redefined
+  virtual void fecPacketReady1(unsigned int, unsigned int, struct timeval, unsigned int);
 
 protected:
   Boolean fCurrentPacketBeginsFrame;
@@ -63,8 +62,6 @@ private:
   virtual void setPacketReorderingThresholdTime(unsigned uSeconds);
   void parseRTPPacket(BufferedPacket *packet);
   bool checkPRTHeader(BufferedPacket *packet);
-  static void fecPacketReady(void *, unsigned int, unsigned int, struct timeval, unsigned int);
-  void fecPacketReady1(unsigned int, unsigned int, struct timeval, unsigned int);
 
 private:
   void reset();
@@ -79,8 +76,6 @@ private:
   Boolean fPacketLossInFragmentedFrame;
   unsigned char* fSavedTo;
   unsigned fSavedMaxSize;
-  unsigned char pFECBuffer[MAX_FEC_PACKET_SIZE];
-  FEC2DParityMultiplexor* pFEC;
 
   // A buffer to (optionally) hold incoming pkts that have been reorderered
   class ReorderingPacketBuffer* fReorderingBuffer;

@@ -7,16 +7,18 @@
 #define InterleaveIndex 0
 #define NonInterleaveIndex 1
 
-FEC2DParityMultiplexor* FEC2DParityMultiplexor::createNew(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow) {
-    return new FEC2DParityMultiplexor(env, row, column, repairWindow);
+FEC2DParityMultiplexor* FEC2DParityMultiplexor::createNew(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow, u_int8_t interleavePayload, u_int8_t nonInterleavePayload) {
+	return new FEC2DParityMultiplexor(env, row, column, repairWindow, interleavePayload, nonInterleavePayload);
 }
 
-FEC2DParityMultiplexor::FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow) : FECMultiplexor(env){
+FEC2DParityMultiplexor::FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow, u_int8_t interleavePayload, u_int8_t nonInterleavePayload) : FECMultiplexor(env){
     first = True;
     ssrcWasSet = False;
     fRepairWindow = repairWindow;
     fRow = row;
     fColumn = column;
+	fInterleavePayloadFormat = interleavePayload;
+	fNonInterleavePayloadFormat = nonInterleavePayload;
     hostSSRC = 0;
 	reordingBuffers[InterleaveIndex] = NULL;
 	reordingBuffers[NonInterleaveIndex] = NULL;
@@ -212,24 +214,19 @@ void FEC2DParityMultiplexor::preProcessFECPacket(int index, BufferedPacket* srcP
 void FEC2DParityMultiplexor::pushFECRTPPacket(BufferedPacket* srcPacket)
 {
 	int payload = EXTRACT_BIT_RANGE(0, 7, srcPacket->data()[1]);
-	if (payload == 115)
+	if (payload == fNonInterleavePayloadFormat)
 	{
 		//DebugPrintf("receive: %d, size:%d, seq: %u, start :%d, end :%d\n", payload, srcPacket->dataSize(), (unsigned)((((u_int16_t)srcPacket->data()[20]) << 8) | srcPacket->data()[21]), srcPacket->data()[12 + 12] & 0x01, srcPacket->data()[12 + 12] & 0x02);
 		preProcessFECPacket(NonInterleaveIndex, srcPacket);
 	}
-	else if (payload == 116)
+	else if (payload == fInterleavePayloadFormat)
 	{
 		//DebugPrintf("receive: %d, size:%d, seq: %u, start :%d, end :%d\n", payload, srcPacket->dataSize(), (unsigned)((((u_int16_t)srcPacket->data()[20]) << 8) | srcPacket->data()[21]), srcPacket->data()[12 + 12] & 0x01, srcPacket->data()[12 + 12] & 0x02);
 		preProcessFECPacket(InterleaveIndex, srcPacket);
 	}
-	else if (96 == payload)
-	{
-		//DebugPrintf("receive: %d, size:%d, seq: %u\n", payload, srcPacket->dataSize(), (unsigned)((ntohl(*(u_int32_t*)(srcPacket->data()))) & 0xFFFF));
-		pushFECRTPPacket(srcPacket->data(), srcPacket->dataSize());
-	}
 	else
 	{
-		DebugPrintf("receive unexpected type: %d, size:%d, seq: %u\n", payload, srcPacket->dataSize(), (unsigned)((ntohl(*(u_int32_t*)(srcPacket->data()))) & 0xFFFF));
+		//DebugPrintf("receive unexpected type: %d, size:%d, seq: %u\n", payload, srcPacket->dataSize(), (unsigned)((ntohl(*(u_int32_t*)(srcPacket->data()))) & 0xFFFF));
 		pushFECRTPPacket(srcPacket->data(), srcPacket->dataSize());
 	}
 }
@@ -248,7 +245,7 @@ void FEC2DParityMultiplexor::pushFECRTPPacket(unsigned char* buffer, unsigned bu
 		bool bRes = insertPacket(rtpPacket);  
 		if (!bRes)
 		{
-			if (payload != 115 && payload != 116)
+			if (payload != fNonInterleavePayloadFormat && payload != fInterleavePayloadFormat)
 			{
 				fRTPPackets.push(rtpPacket);
 				thereWasReadyRTPPackets = True;
@@ -311,7 +308,7 @@ void FEC2DParityMultiplexor::setHostSSRCIfNotSet(RTPPacket* rtpPacket) {
     if (ssrcWasSet) 
 		return;
     int payload = EXTRACT_BIT_RANGE(0, 7, rtpPacket->content()[1]);
-    if (payload == 115 || payload == 116) 
+	if (payload == fNonInterleavePayloadFormat || payload == fInterleavePayloadFormat)
 		return;
     hostSSRC = FECDecoder::extractSSRC(rtpPacket);
     ssrcWasSet = True;
@@ -333,7 +330,7 @@ bool FEC2DParityMultiplexor::insertPacket(RTPPacket* rtpPacket)
 {
 	bool bRes = true;
     int payload = EXTRACT_BIT_RANGE(0, 7, rtpPacket->content()[1]);
-	u_int16_t seq = (payload == 115 || payload == 116) ? FECDecoder::extractFECBase(rtpPacket) : FECDecoder::extractRTPSeq(rtpPacket);
+	u_int16_t seq = (payload == fNonInterleavePayloadFormat || payload == fInterleavePayloadFormat) ? FECDecoder::extractFECBase(rtpPacket) : FECDecoder::extractRTPSeq(rtpPacket);
 	int sourcePacketCount = fRow * fColumn;
     u_int16_t newSeq = currentSequenceNumber + sourcePacketCount;
     if (newSeq >= currentSequenceNumber) 
@@ -415,7 +412,7 @@ void FEC2DParityMultiplexor::handleEmergencyBuffer(u_int16_t base) {
 		RTPPacket* current = emergencyBuffer.at(i);
 
 		int payload = EXTRACT_BIT_RANGE(0, 7, current->content()[1]);
-		u_int16_t seq = (payload == 115 || payload == 116) ? FECDecoder::extractFECBase(current) : FECDecoder::extractRTPSeq(current);
+		u_int16_t seq = (payload == fNonInterleavePayloadFormat || payload == fInterleavePayloadFormat) ? FECDecoder::extractFECBase(current) : FECDecoder::extractRTPSeq(current);
 
 		bool bInCluster = fecCluster->seqNumInCluster(seq);  //这个包属于这个组吗？
 		if (bInCluster)
@@ -425,7 +422,7 @@ void FEC2DParityMultiplexor::handleEmergencyBuffer(u_int16_t base) {
 			bool bRes = insertPacket(current);  //插入失败怎么办！
 			if (!bRes)
 			{
-				if (payload != 115 && payload != 116)
+				if (payload != fNonInterleavePayloadFormat && payload != fInterleavePayloadFormat)
 				{
 					fRTPPackets.push(current);
 					thereWasReadyRTPPackets = True;
@@ -457,13 +454,13 @@ void FEC2DParityMultiplexor::findBase(int* didFind, u_int16_t* newBase) {
 	for (int i = 0; i < emergencyBuffer.size(); i++) {
 		RTPPacket* curr = emergencyBuffer.at(i);
 		int payload = EXTRACT_BIT_RANGE(0, 7, curr->content()[1]);
-		if (payload == 115 || payload == 116) {
+		if (payload == fNonInterleavePayloadFormat || payload == fInterleavePayloadFormat) {
 			u_int16_t currBase = (((u_int16_t)curr->content()[20]) << 8) | curr->content()[21];
 
 			for (int j = 0; j < emergencyBuffer.size(); j++) {
 				RTPPacket* lol = emergencyBuffer.at(j);
 				int payload2 = EXTRACT_BIT_RANGE(0, 7, lol->content()[1]);
-				if (payload2 == (payload == 115 ? 116 : 115)) {
+				if (payload2 == (payload == fNonInterleavePayloadFormat ? fInterleavePayloadFormat : fNonInterleavePayloadFormat)) {
 					u_int16_t lolBase = (((u_int16_t)lol->content()[20]) << 8) | lol->content()[21];
 					if (currBase == lolBase) {
 						*didFind = 1;

@@ -35,15 +35,6 @@ MultiFramedRTPSource
   : RTPSource(env, RTPgs, rtpPayloadFormat, rtpTimestampFrequency) {
   reset();
   fReorderingBuffer = new ReorderingPacketBuffer(packetFactory);
-  memset(pFECBuffer, 0, sizeof(pFECBuffer));
-  pFEC = NULL;
-  bool isVideo = rtpPayloadFormat == 96;
-  if (false)
-  {
-	  pFEC = FEC2DParityMultiplexor::createNew(env, 6, 6, 300);
-	  pFEC->createReorderBuffers(packetFactory);
-	  pFEC->setCallback(pFECBuffer, sizeof(pFECBuffer), fecPacketReady, this);
-  }
   // Try to use a big receive buffer for RTP:
   increaseReceiveBufferTo(env, RTPgs->socketNum(), 50*1024);
 }
@@ -59,7 +50,6 @@ void MultiFramedRTPSource::reset() {
 
 MultiFramedRTPSource::~MultiFramedRTPSource() {
   delete fReorderingBuffer;
-  delete pFEC;
 }
 
 Boolean MultiFramedRTPSource
@@ -231,12 +221,12 @@ void MultiFramedRTPSource::networkReadHandler1() {
 		if ((our_random()%10) == 0) break; // simulate 10% packet loss
 #endif
 		//send packet to FEC Module
-		if (pFEC)
+		if (pFECInstance)
 		{
 			bool bCheckRTP = checkPRTHeader(bPacket);
 			bReleasePacket = TRUE;
 			if (bCheckRTP)
-				pFEC->pushFECRTPPacket(bPacket);
+				pFECInstance->pushFECRTPPacket(bPacket);
 			else
 			{
 				//rtp header check failed! release packet later
@@ -250,15 +240,6 @@ void MultiFramedRTPSource::networkReadHandler1() {
 	} while (0);
 	if (bReleasePacket)
 		fReorderingBuffer->freePacket(bPacket);
-}
-
-void MultiFramedRTPSource::fecPacketReady(void* clientData, unsigned frameSize,
-	unsigned numTruncatedBytes,
-struct timeval presentationTime,
-	unsigned durationInMicroseconds)
-{
-	MultiFramedRTPSource* pThis = (MultiFramedRTPSource*)clientData;
-	pThis->fecPacketReady1(frameSize, numTruncatedBytes, presentationTime, durationInMicroseconds);
 }
 
 void MultiFramedRTPSource::fecPacketReady1(unsigned frameSize,unsigned numTruncatedBytes,

@@ -1516,17 +1516,41 @@ Boolean MediaSubsession::createSourceObjects(int useSpecialRTPoffset) {
 	break;
       }
       
-      if (createSimpleRTPSource) {
-	char* mimeType
-	  = new char[strlen(mediumName()) + strlen(codecName()) + 2] ;
-	sprintf(mimeType, "%s/%s", mediumName(), codecName());
-	fReadSource = fRTPSource
-	  = SimpleRTPSource::createNew(env(), fRTPSocket, fRTPPayloadFormat,
+      if (createSimpleRTPSource) 
+	  {
+		  char* mimeType = new char[strlen(mediumName()) + strlen(codecName()) + 2] ;
+	      sprintf(mimeType, "%s/%s", mediumName(), codecName());
+	      fReadSource = fRTPSource = SimpleRTPSource::createNew(env(), fRTPSocket, fRTPPayloadFormat,
 				       fRTPTimestampFrequency, mimeType,
 				       (unsigned)useSpecialRTPoffset,
 				       doNormalMBitRule);
-	delete[] mimeType;
+		  delete[] mimeType;
       }
+	  if (fRTPSource && mSdpRTPMapsCount > 1)
+	  {
+		  int row = 0;
+		  row = atoi(fmtp_fec_row());
+		  int column = 0;
+		  column = atoi(fmtp_fec_column());
+		  int repair_window = 0;
+		  repair_window = atoi(fmtp_fec_repairwindow());
+		  if (row > 0 && column > 0 && repair_window > 0)
+		  {
+			  FECInfo* pInfo = new FECInfo[mSdpRTPMapsCount - 1];
+			  for (int i = 0; i < mSdpRTPMapsCount - 1; i++)
+			  {
+				  pInfo[i].fNumChannels = rtpMaps[i + 1].fNumChannels;
+				  pInfo[i].fPayloadFormat = rtpMaps[i + 1].fRTPPayloadFormat;
+				  pInfo[i].fTimestampFrequency = rtpMaps[i + 1].fRTPTimestampFrequency;
+				  pInfo[i].fCodecName = rtpMaps[i + 1].fCodecName;  //ָ�븳ֵ
+			  }
+			  fRTPSource->setFECInfo(pInfo, mSdpRTPMapsCount - 1);
+			  fRTPSource->setFECParameter(row,column,repair_window / 1000);
+			  fRTPSource->enableFEC(true);
+			  delete[] pInfo;
+		  }
+		  
+	  }
     }
 
     return True;
