@@ -1,15 +1,17 @@
 #include "include/FECCluster.hh"
 #include "GroupsockHelper.hh"
-#include <iostream>
+//#include <iostream>
 
-FECCluster* FECCluster::createNew(u_int16_t base, u_int8_t row, u_int8_t column) {
-    return new FECCluster(base, row, column);
+FECCluster* FECCluster::createNew(u_int16_t base, u_int8_t row, u_int8_t column, u_int8_t interLeave, u_int8_t nonInterLeave) {
+    return new FECCluster(base, row, column,interLeave,nonInterLeave);
 }
 
-FECCluster::FECCluster(u_int16_t base, u_int8_t row, u_int8_t column) {
+FECCluster::FECCluster(u_int16_t base, u_int8_t row, u_int8_t column, u_int8_t interLeave, u_int8_t nonInterLeave) {
     fBase = base;
     fRow = row;
-    fColumn = column;
+	fColumn = column;
+	fInterleave = interLeave;
+	fNonInterleave = nonInterLeave;
 
     int size = (row + 1) * (column + 1) - 1;
     fRTPPackets = new RTPPacket*[size];
@@ -37,12 +39,12 @@ void FECCluster::insertPacket(RTPPacket* rtpPacket) {
 
 int FECCluster::getIndex(RTPPacket* rtpPacket) {
 	int payload = EXTRACT_BIT_RANGE(0, 7, rtpPacket->content()[1]);
-	if (payload == 115) {
+	if (payload == fNonInterleave) {
 		u_int16_t base = (((u_int16_t)rtpPacket->content()[20]) << 8) | rtpPacket->content()[21];
         u_int16_t prelimIndex = base - fBase;
 		return prelimIndex / fColumn * (fColumn + 1) + fColumn;
 	}
-	else if (payload == 116) {
+	else if (payload == fInterleave) {
 		u_int16_t columnBase = (((u_int16_t)rtpPacket->content()[20]) << 8) | rtpPacket->content()[21];
         u_int16_t prelimIndex = columnBase - fBase;
 		return prelimIndex + fRow * (fColumn + 1);
@@ -67,6 +69,17 @@ Boolean FECCluster::allRTPPacketsArePresent() {
 			return False;
 	}
 	return True;
+}
+
+int FECCluster::getAbsenceNumber() {
+	int absenceNumber = 0;
+	int size = sourcePacketCount();
+	for (int i = 0; i < size; i++) {
+		int index = i + i / fColumn;
+		if (fRTPPackets[index] == NULL)
+			absenceNumber++;
+	}
+	return absenceNumber;
 }
 
 Boolean FECCluster::hasExpired(long long repairWindow) {

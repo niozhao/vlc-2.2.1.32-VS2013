@@ -20,6 +20,7 @@ public:
 	void pushFECRTPPacket(BufferedPacket* packet);
 	void createReorderBuffers(BufferedPacketFactory* packetFactory = NULL);
 	void setCallback(unsigned char* to, unsigned maxSize, afterGettingFunc*, void*);
+	void get2DParityParameter(u_int8_t& row, u_int8_t& column, long long& repairWindow/* unit: ms*/);
 
 public:
     Boolean first;

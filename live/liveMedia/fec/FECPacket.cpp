@@ -1,5 +1,5 @@
 #include "include/FECPacket.hh"
-#include <iostream>
+//#include <iostream>
 
 //TODO: Handle extension header?
 FECPacket* FECPacket::createNew(unsigned char* content, unsigned size) {
@@ -20,9 +20,9 @@ FECPacket::~FECPacket() {
 }
 
 void FECPacket::printPacket() {
-    for (int i = 0; i < 12; i++) {
+    /*for (int i = 0; i < 12; i++) {
         std::cout << (int)fContent[i] << " ";
         if ((i + 1) % 4 == 0) std::cout << "\n";
     }
-    std::cout << "\n";
+    std::cout << "\n";*/
 }

@@ -71,6 +71,9 @@ public:
   virtual void appendToResultMsg(MsgString msg) = 0;
 
   virtual void reportBackgroundError() = 0;
+
+  char const* format(const char* format, ...);
+  void log(char const* format, ...);
 	// used to report a (previously set) error message within
 	// a background event
 

@@ -97,6 +97,8 @@ static void Close( vlc_object_t * );
     "to too small buffer.")
 #define DEFAULT_FRAME_BUFFER_SIZE 100000
 
+//vlc_set_cb: vlc_plugin_setter() in entry.c
+
 vlc_module_begin ()
     set_description( N_("RTP/RTSP/SDP demuxer (using Live555)" ) )
     set_capability( "demux", 50 )
@@ -777,7 +779,9 @@ static int SessionsSetup( demux_t *p_demux )
                     increaseReceiveBufferTo( *p_sys->env, fd, i_receive_buffer );
 
                 /* Increase the RTP reorder timebuffer just a bit */
-                sub->rtpSource()->setPacketReorderingThresholdTime(thresh);
+				unsigned fecRepairWindowTime = (unsigned)sub->rtpSource()->getFECRepairWindowTime();
+				unsigned threshTime = fecRepairWindowTime >= thresh ? (fecRepairWindowTime + 50 * 1000) : thresh;
+				sub->rtpSource()->setPacketReorderingThresholdTime(threshTime);
             }
             msg_Dbg( p_demux, "RTP subsession '%s/%s'", sub->mediumName(),
                      sub->codecName() );

@@ -60,6 +60,7 @@ private:
   // redefined virtual functions:
   virtual void doGetNextFrame();
   virtual void setPacketReorderingThresholdTime(unsigned uSeconds);
+  virtual long long getFECRepairWindowTime();
   void parseRTPPacket(BufferedPacket *packet);
   bool checkPRTHeader(BufferedPacket *packet);
 

@@ -87,7 +87,7 @@ void RTPSource::setFECInfo(FECInfo* pInfo, int count)
 		pFECInfo[i].fPayloadFormat = pInfo[i].fPayloadFormat;
 		pFECInfo[i].fTimestampFrequency = pInfo[i].fTimestampFrequency;
 		pFECInfo[i].fNumChannels = pInfo[i].fNumChannels;
-		pFECInfo[i].fCodecName = strDupSize(pInfo[i].fCodecName);
+		pFECInfo[i].fCodecName = strDup(pInfo[i].fCodecName);
 	}	
 }
 
@@ -112,9 +112,27 @@ void RTPSource::enableFEC(bool bEnable)
 		pFECInstance = NULL;
 		if (2 == mFECInfoCount && true/*fCodecName == FEC2DParityMultiplexor */)
 		{
-			pFECInstance = FEC2DParityMultiplexor::createNew(envir(), mRow, mColumn, mRepairWindow, pFECInfo[0].fPayloadFormat, pFECInfo[1].fPayloadFormat);
-			pFECInstance->createReorderBuffers();
-			pFECInstance->setCallback(pFECBuffer, sizeof(pFECBuffer), fecPacketReady, this);
+			//
+			unsigned char interleavedValue = 0;
+			unsigned char nonInterleavedValue = 0;
+			char* interleavedDesc = "INTERLEAVED";  //vlc make this info to toupper!
+			char* nonInterleavedDesc = "NONINTERLEAVED";
+			if (strstr(pFECInfo[0].fCodecName, interleavedDesc) && strstr(pFECInfo[1].fCodecName, nonInterleavedDesc))
+			{
+				interleavedValue = pFECInfo[0].fPayloadFormat;
+				nonInterleavedValue = pFECInfo[1].fPayloadFormat;
+			}
+			else if (strstr(pFECInfo[1].fCodecName, interleavedDesc) && strstr(pFECInfo[0].fCodecName, nonInterleavedDesc))
+			{
+				interleavedValue = pFECInfo[1].fPayloadFormat;
+				nonInterleavedValue = pFECInfo[0].fPayloadFormat;
+			}
+			if (interleavedValue && nonInterleavedValue)
+			{
+				pFECInstance = FEC2DParityMultiplexor::createNew(envir(), mRow, mColumn, mRepairWindow, interleavedValue, nonInterleavedValue);
+				pFECInstance->createReorderBuffers();
+				pFECInstance->setCallback(pFECBuffer, sizeof(pFECBuffer), fecPacketReady, this);
+			}
 		}
 	}
 	else

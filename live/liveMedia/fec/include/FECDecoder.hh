@@ -7,9 +7,10 @@ class FECDecoder {
 
 public:
     static FECDecoder* createNew();
+	static void setFECDecoderPar(u_int8_t interLeave, u_int8_t nonInterLeave);
     static unsigned char* generateBitString(unsigned char* rtpPacket, unsigned payloadSize);
     //static void repairCluster(RTPPacket** cluster, unsigned d, unsigned l, u_int32_t ssrc);
-    static void repairCluster(RTPPacket** cluster, unsigned row, unsigned column, unsigned ssrc);
+    static unsigned repairCluster(RTPPacket** cluster, unsigned row, unsigned column, unsigned ssrc);
 	static void printCluster(FECCluster* feccluster, unsigned d, unsigned l);
 
     static u_int16_t extractFECBase(RTPPacket* rtpPacket);
@@ -39,7 +40,8 @@ private:
     static void repairNonInterleaved(RTPPacket** cluster, unsigned d, unsigned l, unsigned ssrc, unsigned* numRecoveredSoFar);
     static void repairInterleaved(RTPPacket** cluster, unsigned d, unsigned l, unsigned ssrc, unsigned* numRecoveredSoFar);
 
-
+	static u_int8_t fInterleaveFormat;
+	static u_int8_t fNonInterleaveFormat;
 
 
 

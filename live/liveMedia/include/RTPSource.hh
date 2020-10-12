@@ -54,6 +54,7 @@ public:
   Groupsock* RTPgs() const { return fRTPInterface.gs(); }
 
   virtual void setPacketReorderingThresholdTime(unsigned uSeconds) = 0;
+  virtual long long getFECRepairWindowTime() = 0;
 
   // used by RTCP:
   u_int32_t SSRC() const { return fSSRC; }

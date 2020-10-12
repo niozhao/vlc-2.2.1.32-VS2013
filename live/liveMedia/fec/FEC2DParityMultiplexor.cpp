@@ -1,7 +1,7 @@
 #include "include/FEC2DParityMultiplexor.hh"
 #include "GroupsockHelper.hh"
-#include "FECEncoder.hh"
-#include <iostream>
+//#include "FECEncoder.hh"
+//#include <iostream>
 #define MAX_FEC_BUFFER_SIZE (100 * 1024)
 
 #define InterleaveIndex 0
@@ -19,6 +19,7 @@ FEC2DParityMultiplexor::FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t r
     fColumn = column;
 	fInterleavePayloadFormat = interleavePayload;
 	fNonInterleavePayloadFormat = nonInterleavePayload;
+	FECDecoder::setFECDecoderPar(interleavePayload, nonInterleavePayload);
     hostSSRC = 0;
 	reordingBuffers[InterleaveIndex] = NULL;
 	reordingBuffers[NonInterleaveIndex] = NULL;
@@ -28,12 +29,21 @@ FEC2DParityMultiplexor::FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t r
 	resetFECBuffer(InterleaveIndex);
 	resetFECBuffer(NonInterleaveIndex);
 
+	envir().log("\ncreate FEC2DParityMultiplexor.row:%d, column:%d, repairWindow:%lld, interleavePayload:%d, nonInterleavePayload:%d\n\n", row,column,repairWindow,interleavePayload,nonInterleavePayload);
+
     nextTask() = envir().taskScheduler().scheduleDelayedTask(20000, (TaskFunc*)sendNext, this);
+}
+
+void FEC2DParityMultiplexor::get2DParityParameter(u_int8_t& row, u_int8_t& column, long long& repairWindow/* unit: ms*/)
+{
+	row = fRow;
+	column = fColumn;
+	repairWindow = fRepairWindow;
 }
 
 void FEC2DParityMultiplexor::resetFECBuffer(int index)
 {
-	memset(fFECBuffers[index], 0, sizeof(fFECBuffers[index]));
+	memset(fFECBuffers[index], 0, MAX_FEC_BUFFER_SIZE);
 	pTo[index] = fFECBuffers[index];
 	frameSize[index] = 0;
 	maxSize[index] = MAX_FEC_BUFFER_SIZE;
@@ -199,7 +209,7 @@ void FEC2DParityMultiplexor::preProcessFECPacket(int index, BufferedPacket* srcP
 					DebugPrintf("FEC2DParityMultiplexor the total received frame size exceeds the client's buffer size:%d.%d bytes of trailing data will be dropped!\n", (int)MAX_FEC_BUFFER_SIZE, bytesTruncated);
 				}
 				pushFECRTPPacket(fCurrentFECBuffer, *fCurrentFrameSize);
-				//DebugPrintf("succeed get %d, size:%u, seqenceNum:%u\n", bInterleave ? 116 : 115, *fCurrentFrameSize, (unsigned)((((u_int16_t)fCurrentFECBuffer[20]) << 8) | fCurrentFECBuffer[21]));
+				//DebugPrintf("succeed get %d, size:%u, seqenceNum:%u\n", bInterleave ? fInterleavePayloadFormat : fNonInterleavePayloadFormat, *fCurrentFrameSize, (unsigned)((((u_int16_t)fCurrentFECBuffer[20]) << 8) | fCurrentFECBuffer[21]));
 				resetFECBuffer(index);
 			}
 			else {
@@ -214,6 +224,7 @@ void FEC2DParityMultiplexor::preProcessFECPacket(int index, BufferedPacket* srcP
 void FEC2DParityMultiplexor::pushFECRTPPacket(BufferedPacket* srcPacket)
 {
 	int payload = EXTRACT_BIT_RANGE(0, 7, srcPacket->data()[1]);
+	//envir().log("push a rtp packet to fec: %d\n", payload);
 	if (payload == fNonInterleavePayloadFormat)
 	{
 		//DebugPrintf("receive: %d, size:%d, seq: %u, start :%d, end :%d\n", payload, srcPacket->dataSize(), (unsigned)((((u_int16_t)srcPacket->data()[20]) << 8) | srcPacket->data()[21]), srcPacket->data()[12 + 12] & 0x01, srcPacket->data()[12 + 12] & 0x02);
@@ -281,11 +292,13 @@ void FEC2DParityMultiplexor::repairPackets() {
 		if (!bGetAllRTPPacket && bClusterTimeout) {
 			//进入这里说明：该Cluster还未收齐数据包(非冗余包) 但 该Cluster已经超时了，尝试用冗余包把缺失的数据包恢复
 			//FECDecoder::printCluster(cluster, fRow, fColumn);
-			FECDecoder::repairCluster(cluster->rtpPackets(), fRow, fColumn, hostSSRC);   //what if ssrc is not set?
+			int absenceNum = cluster->getAbsenceNumber();
+			unsigned repairedPackets = FECDecoder::repairCluster(cluster->rtpPackets(), fRow, fColumn, hostSSRC);   //what if ssrc is not set?
+			DebugPrintf("Cluster %d absence %d packets and repair %u\n\n\n", cluster->base(), absenceNum, repairedPackets);
 		}
 		else{
 			//进入这里说明：该Cluster收齐了所有的数据包(非冗余包)，无需repair
-			DebugPrintf("Cluster %d, status: bGetAllRTPPacket is %d, bClusterTimeout is %d", cluster->base(), bGetAllRTPPacket, bClusterTimeout);
+			DebugPrintf("Cluster %d no need repair, status: bGetAllRTPPacket is %d, bClusterTimeout is %d\n", cluster->base(), bGetAllRTPPacket, bClusterTimeout);
 		}
 
 		flushCluster(cluster->rtpPackets());  //将Cluster里的数据包(非冗余包)移到fRTPPackets，下面会通知上层来取
@@ -348,7 +361,7 @@ bool FEC2DParityMultiplexor::insertPacket(RTPPacket* rtpPacket)
 			{
 				updateCurrentSequenceNumber(seq, sourcePacketCount);
 				//DebugPrintf("receive %d, seq: %u,now new a new cluster\n", payload, seq);
-				FECCluster* fecCluster = FECCluster::createNew(currentSequenceNumber, fRow, fColumn);
+				FECCluster* fecCluster = FECCluster::createNew(currentSequenceNumber, fRow, fColumn, fInterleavePayloadFormat, fNonInterleavePayloadFormat);
 				fecCluster->insertPacket(rtpPacket);
 				superBuffer.push_back(fecCluster);
 			}
@@ -389,7 +402,7 @@ bool FEC2DParityMultiplexor::insertPacket(RTPPacket* rtpPacket)
 			else
 			{
 				updateCurrentSequenceNumber(seq, sourcePacketCount);
-				FECCluster* fecCluster = FECCluster::createNew(currentSequenceNumber, fRow, fColumn);
+				FECCluster* fecCluster = FECCluster::createNew(currentSequenceNumber, fRow, fColumn, fInterleavePayloadFormat, fNonInterleavePayloadFormat);
 				fecCluster->insertPacket(rtpPacket);
 				superBuffer.push_back(fecCluster);
 			}
@@ -404,7 +417,7 @@ bool FEC2DParityMultiplexor::insertPacket(RTPPacket* rtpPacket)
 	Håndter flere clustere hvis base er laaangt fram i tid
 */
 void FEC2DParityMultiplexor::handleEmergencyBuffer(u_int16_t base) {
-	FECCluster* fecCluster = FECCluster::createNew(base, fRow, fColumn);
+	FECCluster* fecCluster = FECCluster::createNew(base, fRow, fColumn, fInterleavePayloadFormat, fNonInterleavePayloadFormat);
 	Boolean thereWasReadyRTPPackets = False;
 	superBuffer.push_back(fecCluster);
 
