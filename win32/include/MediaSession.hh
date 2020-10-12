@@ -54,7 +54,6 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #ifndef _FRAMED_FILTER_HH
 #include "FramedFilter.hh"
 #endif
-#include <string>
 
 class MediaSubsession; // forward
 
@@ -290,7 +289,7 @@ protected:
 
   void setAttribute(char const* name, char const* value = NULL, Boolean valueIsHexadecimal = False);
 
-  Boolean parseSDPLine_m(char const* sdpLine, unsigned short& clientPort, std::string& protocolNAME, std::string& mediumNAME);
+  Boolean parseSDPLine_m(char const* sdpLine, unsigned short& clientPort, char ** protocolNAME, char ** mediumNAME);
   Boolean parseSDPLine_c(char const* sdpLine);
   Boolean parseSDPLine_b(char const* sdpLine);
   Boolean parseSDPAttribute_rtpmap(char const* sdpLine);

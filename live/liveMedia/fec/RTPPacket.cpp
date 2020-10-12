@@ -3,27 +3,44 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#ifdef WIN32
 #include <Windows.h>
+#elif __ANDROID__
+#include <android/log.h>
+#define  LOG_TAG    "FEC"
+#endif
 
 void DebugPrintf(const char* format, ...)
 {
-	char strBuffer[4096] = { 0 };
 	va_list vlArgs;
 	va_start(vlArgs, format);
+#ifdef WIN32
+	char strBuffer[4096] = { 0 };
 	_vsnprintf(strBuffer, sizeof(strBuffer) - 1, format, vlArgs);
-	va_end(vlArgs);
 	OutputDebugStringA(strBuffer);
+#elif __ANDROID__
+	__android_log_print(ANDROID_LOG_INFO, LOG_TAG, format, vlArgs);
+#endif
+	va_end(vlArgs);
 }
 
-std::string FormatString(const char* format, ...)
+char const* FormatString(const char* format, ...)
 {
-	char strBuffer[1024] = { 0 };
+	const int bufferSize = 1024;
+	char* strBuffer = new char[bufferSize];
+	memset(strBuffer, 0, bufferSize);
 	va_list vlArgs;
 	va_start(vlArgs, format);
-	_vsnprintf(strBuffer, sizeof(strBuffer) - 1, format, vlArgs);
+#ifdef WIN32
+	_vsnprintf(strBuffer, bufferSize - 1, format, vlArgs);
+#else
+	snprintf(strBuffer, bufferSize - 1, format, vlArgs);
+#endif
 	va_end(vlArgs);
-	return (std::string)strBuffer;
+	return strBuffer;
 }
+
 
 //TODO: Handle extension header?
 RTPPacket* RTPPacket::createNew(unsigned char* rtpPacket, unsigned rtpPacketSize) {

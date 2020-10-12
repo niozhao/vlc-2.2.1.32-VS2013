@@ -130,9 +130,9 @@ Boolean MediaSession::initializeWithSDP(char const* sdpDescription) {
       return False;
     }
 
-	std::string strProtocolName;
-	std::string strMediumName;
-	if (!subsession->parseSDPLine_m(sdpLine, subsession->fClientPortNum, strProtocolName, strMediumName))
+	char * strProtocolName;
+	char * strMediumName;
+	if (!subsession->parseSDPLine_m(sdpLine, subsession->fClientPortNum, &strProtocolName, &strMediumName))
 	{
         // This "m=" line is bad; output an error message saying so:
         char* sdpLineStr;
@@ -178,8 +178,8 @@ Boolean MediaSession::initializeWithSDP(char const* sdpDescription) {
     char const* mStart = sdpLine;
     subsession->fSavedSDPLines = strDup(mStart);
 
-	subsession->fMediumName = strDup(strMediumName.c_str());
-	subsession->fProtocolName = strDup(strProtocolName.c_str());
+	subsession->fMediumName = strMediumName;
+	subsession->fProtocolName = strProtocolName;
 
     // Process the following SDP lines, up until the next "m=":
     while (1) {
@@ -994,36 +994,14 @@ void MediaSubsession
   (void)fAttributeTable->Add(name, newAttr);
 }
 
-std::vector<std::string> splitString(const std::string& s, const std::string& delim)
-{
-	std::vector<std::string> elems;
-	size_t pos = 0;
-	size_t len = s.length();
-	size_t delim_len = delim.length();
-	if (delim_len == 0) 
-		return elems;
-	while (pos < len)
-	{
-		int find_pos = s.find(delim, pos);
-		if (find_pos == std::string::npos)
-		{
-			elems.push_back(s.substr(pos));
-			break;
-		}
-		elems.push_back(s.substr(pos, find_pos - pos));
-		pos = find_pos + delim_len;
-	}
-	return elems;
-}
-
-Boolean MediaSubsession::parseSDPLine_m(char const* sdpLine, unsigned short& clientPort, std::string& protocolNAME, std::string& mediumNAME)
+Boolean MediaSubsession::parseSDPLine_m(char const* sdpLine, unsigned short& clientPort, char** protocolNAME, char** mediumNAME)
 {
 	// Parse the line as "m=<medium_name> <client_portNum> RTP/AVP <fmt> <fmt> ..."
 	// or "m=<medium_name> <client_portNum>/<num_ports> RTP/AVP <fmt> <fmt> ..."
 	// (Should we be checking for >1 payload format number here?)#####
 	char* mediumName = strDupSize(sdpLine); // ensures we have enough space
 	char const* protocolName = NULL;
-	std::string protocolString("INVALID");
+	char const* protocolString = "INVALID";
 	if ((sscanf(sdpLine, "m=%s %hu RTP/AVP", mediumName, &clientPort) == 2 ||  //%hu以 unsigned short格式输出整数
 		sscanf(sdpLine, "m=%s %hu/%*u RTP/AVP", mediumName, &clientPort) == 2))
 	{
@@ -1050,34 +1028,59 @@ Boolean MediaSubsession::parseSDPLine_m(char const* sdpLine, unsigned short& cli
 	}
 	else
 	{
-		return FALSE;
+		return False;
 	}
 
-	std::string copyString(sdpLine);
-	std::size_t index = copyString.find(protocolString);
-	if (index == std::string::npos)
-		return FALSE;
-	copyString = copyString.substr(index + protocolString.length());
-	if ((index = copyString.find("\r\n")) != std::string::npos)
-		copyString = copyString.substr(0,index);
-	const char* p = copyString.c_str();
-	int length = copyString.length();
-	int spaceNumbers = 0;
-	while (' ' == *p++)
-		spaceNumbers++;
-	if (spaceNumbers >= length)
-		return FALSE;
-	std::string payloadsStringTrimmed(copyString.c_str() + spaceNumbers);
-	std::vector<std::string> payloads = splitString(payloadsStringTrimmed, " ");
-	std::vector<int> validPayloads;
-	for (int i = 0; i < payloads.size(); i++)
+	char* const copySDPLine = strDup(sdpLine);  //need free copySDPLine!
+	char* buffer = copySDPLine;
+	char* const copySDPLineEnd = copySDPLine + strlen(copySDPLine);
+	char* pIndex = strstr(copySDPLine, protocolString);  //find string
+	if (!pIndex)
+		return False;
+	char* pNextField = pIndex + strlen(protocolString) - 1;
+	while (*(++pNextField) == ' ' && pNextField < copySDPLineEnd); //skip space char: ' ' 
+	if (pNextField >= copySDPLineEnd)
+		return False;  //has no payload format
+	else
 	{
-		unsigned char payloadFormat = atoi(payloads[i].c_str());
+		//find payload start position: pNextField
+	}
+	//find payload format end position
+	if ((pIndex = strstr(copySDPLine, ("\r\n"))) != NULL)
+		*pIndex = '\0';
+	else
+		pIndex = copySDPLineEnd;  //copy sub string to end
+	int payloadFormatSubStirngLen = pIndex - pNextField;
+	strncpy(buffer, pNextField, payloadFormatSubStirngLen);  //copy sub string
+	buffer[payloadFormatSubStirngLen] = '\0';  //strncpy has no '\0';
+
+	char* start = buffer;
+	char* end = buffer + strlen(buffer);
+	const char* delim = " ";
+	std::vector<int> validPayloads;
+	int bufferLen = strlen(buffer) + 1;
+	char* aPayloadFormat = new char[bufferLen];
+	while (start < end)
+	{
+		memset(aPayloadFormat, 0, bufferLen);
+		char* pIndex = strstr(start, delim);  //find string
+		if (pIndex == NULL)
+		{
+			memmove(aPayloadFormat, start, strlen(start));
+			start += strlen(aPayloadFormat);
+		}
+		else
+		{
+			memmove(aPayloadFormat, start, pIndex - start);
+			start = pIndex + strlen(delim);
+		}
+		unsigned char payloadFormat = atoi(aPayloadFormat);
 		if (payloadFormat > 0 && payloadFormat <= 127)
 			validPayloads.push_back(payloadFormat);
 	}
+	delete[] aPayloadFormat;
 	if (validPayloads.empty())
-		return FALSE;
+		return False;
 	//create rtpMaps;
 	delete[] rtpMaps;
 	mSdpRTPMapsCount = validPayloads.size();
@@ -1089,10 +1092,11 @@ Boolean MediaSubsession::parseSDPLine_m(char const* sdpLine, unsigned short& cli
 		rtpMaps[i].fRTPPayloadFormat = validPayloads[i];
 		rtpMaps[i].fRTPTimestampFrequency = 0;
 	}
-	protocolNAME = protocolName;
-	mediumNAME = mediumName;
+	*protocolNAME = strDup(protocolName);
+	*mediumNAME = strDup(mediumName);
 	delete[] mediumName;
-	return TRUE;
+	delete[] copySDPLine;
+	return True;
 }
 
 Boolean MediaSubsession::parseSDPLine_c(char const* sdpLine) {

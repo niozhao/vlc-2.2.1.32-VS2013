@@ -19,6 +19,16 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 
 #include "UsageEnvironment.hh"
 
+#include <stdarg.h>
+#include <stdlib.h>
+#include <stdio.h>
+#ifdef WIN32
+#include <Windows.h>
+#elif __ANDROID__
+#include <android/log.h>
+#define  LOG_TAG    "LIVE555"
+#endif
+
 Boolean UsageEnvironment::reclaim() {
   // We delete ourselves only if we have no remainining state:
   if (liveMediaPriv == NULL && groupsockPriv == NULL) {
@@ -35,6 +45,37 @@ UsageEnvironment::UsageEnvironment(TaskScheduler& scheduler)
 
 UsageEnvironment::~UsageEnvironment() {
 }
+
+void UsageEnvironment::log(char const* format, ...) 
+{
+	va_list vlArgs;
+	va_start(vlArgs, format);
+#ifdef WIN32
+	char strBuffer[4096] = { 0 };
+	_vsnprintf(strBuffer, sizeof(strBuffer) - 1, format, vlArgs);
+	OutputDebugStringA(strBuffer);
+#elif __ANDROID__
+	__android_log_print(ANDROID_LOG_INFO, LOG_TAG, format, vlArgs);
+#endif
+	va_end(vlArgs);
+}
+
+char const* UsageEnvironment::format(const char* format, ...)
+{
+	const int bufferSize = 1024;
+	char* strBuffer = new char[bufferSize];
+	memset(strBuffer, 0, bufferSize);
+	va_list vlArgs;
+	va_start(vlArgs, format);
+#ifdef WIN32
+	_vsnprintf(strBuffer, bufferSize - 1, format, vlArgs);
+#else
+	snprintf(strBuffer, bufferSize - 1, format, vlArgs);
+#endif
+	va_end(vlArgs);
+	return strBuffer;
+}
+
 
 // By default, we handle 'should not occur'-type library errors by calling abort().  Subclasses can redefine this, if desired.
 // (If your runtime library doesn't define the "abort()" function, then define your own (e.g., that does nothing).)

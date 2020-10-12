@@ -7,11 +7,10 @@
 #define RTP_HEADER_SIZE 12
 #define EXTENSION_HEADER_ID_SIZE 2
 
-#include <string>
 #include <memory>
 
 extern void DebugPrintf(const char* format, ...);
-std::string FormatString(const char* format, ...);
+char const* FormatString(const char* format, ...);
 
 class RTPPacket {
 public:
