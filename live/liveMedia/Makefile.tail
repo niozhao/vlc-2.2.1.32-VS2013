@@ -1,9 +1,11 @@
 ##### End of variables to change
 
+FECModule = FEC
+IFEC = fec/include/
 NAME = libliveMedia
 LIVEMEDIA_LIB = $(NAME).$(LIB_SUFFIX)
 ALL = $(LIVEMEDIA_LIB)
-all:	$(ALL)
+all: $(FECModule) $(ALL)
 
 .$(C).$(OBJ):
 	$(C_COMPILER) -c $(C_FLAGS) $<
@@ -54,7 +56,12 @@ OGG_OBJS = $(OGG_FILE_OBJS) $(OGG_RTSP_SERVER_OBJS)
 
 MISC_OBJS = BitVector.$(OBJ) StreamParser.$(OBJ) DigestAuthentication.$(OBJ) ourMD5.$(OBJ) Base64.$(OBJ) Locale.$(OBJ)
 
-LIVEMEDIA_LIB_OBJS = Media.$(OBJ) $(MISC_SOURCE_OBJS) $(MISC_SINK_OBJS) $(MISC_FILTER_OBJS) $(RTP_OBJS) $(RTCP_OBJS) $(GENERIC_MEDIA_SERVER_OBJS) $(RTSP_OBJS) $(SIP_OBJS) $(SESSION_OBJS) $(QUICKTIME_OBJS) $(AVI_OBJS) $(TRANSPORT_STREAM_TRICK_PLAY_OBJS) $(MATROSKA_OBJS) $(OGG_OBJS) $(MISC_OBJS)
+FEC_OBJS = fec/FEC2DParityMultiplexor.$(OBJ) fec/FECCluster.$(OBJ) fec/FECDecoder.$(OBJ) fec/FECMultiplexor.$(OBJ) fec/FECPacket.$(OBJ) fec/RTPPacket.$(OBJ)
+
+LIVEMEDIA_LIB_OBJS = Media.$(OBJ) $(FEC_OBJS) $(MISC_SOURCE_OBJS) $(MISC_SINK_OBJS) $(MISC_FILTER_OBJS) $(RTP_OBJS) $(RTCP_OBJS) $(GENERIC_MEDIA_SERVER_OBJS) $(RTSP_OBJS) $(SIP_OBJS) $(SESSION_OBJS) $(QUICKTIME_OBJS) $(AVI_OBJS) $(TRANSPORT_STREAM_TRICK_PLAY_OBJS) $(MATROSKA_OBJS) $(OGG_OBJS) $(MISC_OBJS)
+
+$(FECModule): 
+	$(MAKE) -C fec
 
 $(LIVEMEDIA_LIB): $(LIVEMEDIA_LIB_OBJS) \
     $(PLATFORM_SPECIFIC_LIB_OBJS)
@@ -71,10 +78,10 @@ FramedFileSource.$(CPP): include/FramedFileSource.hh
 include/FramedFileSource.hh:	include/FramedSource.hh
 FramedFilter.$(CPP):	include/FramedFilter.hh
 include/FramedFilter.hh:	include/FramedSource.hh
-RTPSource.$(CPP):	include/RTPSource.hh
+RTPSource.$(CPP):	include/RTPSource.hh $(IFEC)FEC2DParityMultiplexor.hh
 include/RTPSource.hh:		include/FramedSource.hh include/RTPInterface.hh
 include/RTPInterface.hh:	include/Media.hh
-MultiFramedRTPSource.$(CPP):	include/MultiFramedRTPSource.hh include/RTCP.hh
+MultiFramedRTPSource.$(CPP):	include/MultiFramedRTPSource.hh include/RTCP.hh $(IFEC)FEC2DParityMultiplexor.hh
 include/MultiFramedRTPSource.hh:	include/RTPSource.hh
 SimpleRTPSource.$(CPP):	include/SimpleRTPSource.hh
 include/SimpleRTPSource.hh:	include/MultiFramedRTPSource.hh
@@ -391,6 +398,7 @@ include/liveMedia.hh:: include/RTSPServerSupportingHTTPStreaming.hh include/RTSP
 
 clean:
 	-rm -rf *.$(OBJ) $(ALL) core *.core *~ include/*~
+	$(MAKE) clean -C fec
 
 install: install1 $(INSTALL2)
 install1: $(LIVEMEDIA_LIB)

@@ -69,7 +69,7 @@ char const* UsageEnvironment::format(const char* format, ...)
 	va_start(vlArgs, format);
 #ifdef WIN32
 	_vsnprintf(strBuffer, bufferSize - 1, format, vlArgs);
-#else
+#elif __ANDROID__
 	snprintf(strBuffer, bufferSize - 1, format, vlArgs);
 #endif
 	va_end(vlArgs);
