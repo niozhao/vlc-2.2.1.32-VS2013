@@ -70,7 +70,7 @@ RTPSource::~RTPSource() {
   delete pFECInstance;
 }
 
-void RTPSource::setFECParameter(int row, int column, int repairWindow)
+void RTPSource::setFECParameter(int row, int column, long long repairWindow)
 {
 	mRow = row;
 	mColumn = column;

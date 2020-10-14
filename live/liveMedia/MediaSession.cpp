@@ -1536,7 +1536,7 @@ Boolean MediaSubsession::createSourceObjects(int useSpecialRTPoffset) {
 		  row = atoi(fmtp_fec_row());
 		  int column = 0;
 		  column = atoi(fmtp_fec_column());
-		  int repair_window = 0;
+		  long long repair_window = 0;
 		  repair_window = atoi(fmtp_fec_repairwindow());
 		  if (row > 0 && column > 0 && repair_window > 0)
 		  {

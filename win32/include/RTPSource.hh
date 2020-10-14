@@ -79,7 +79,7 @@ public:
 
   void enableFEC(bool bEnable);
   void setFECInfo(FECInfo* pInfo, int count);
-  void setFECParameter(int row, int column, int repairWindow);
+  void setFECParameter(int row, int column, long long repairWindow);
 
   void setStreamSocket(int sockNum, unsigned char streamChannelId) {
     // hack to allow sending RTP over TCP (RFC 2236, section 10.12)
@@ -138,7 +138,7 @@ private:
   //for FEC
   int mRow;
   int mColumn;
-  int mRepairWindow;
+  long long mRepairWindow;
   FECInfo* pFECInfo;
   int mFECInfoCount;
 };

@@ -20,7 +20,7 @@ void DebugPrintf(const char* format, ...)
 	_vsnprintf(strBuffer, sizeof(strBuffer) - 1, format, vlArgs);
 	OutputDebugStringA(strBuffer);
 #elif __ANDROID__
-	__android_log_print(ANDROID_LOG_INFO, LOG_TAG, format, vlArgs);
+	__android_log_vprint(ANDROID_LOG_INFO, LOG_TAG, format, vlArgs);
 #endif
 	va_end(vlArgs);
 }

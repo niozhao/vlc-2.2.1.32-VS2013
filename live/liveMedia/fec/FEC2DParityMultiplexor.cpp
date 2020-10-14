@@ -29,7 +29,7 @@ FEC2DParityMultiplexor::FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t r
 	resetFECBuffer(InterleaveIndex);
 	resetFECBuffer(NonInterleaveIndex);
 
-	envir().log("\ncreate FEC2DParityMultiplexor.row:%d, column:%d, repairWindow:%lld, interleavePayload:%d, nonInterleavePayload:%d\n\n", row,column,repairWindow,interleavePayload,nonInterleavePayload);
+	envir().log("\n create FEC2DParityMultiplexor.row:%u, column:%u, repairWindow:%lld, interleavePayload:%u, nonInterleavePayload:%u\n\n", (unsigned)row, (unsigned)column, repairWindow, (unsigned)interleavePayload, (unsigned)nonInterleavePayload);
 
     nextTask() = envir().taskScheduler().scheduleDelayedTask(20000, (TaskFunc*)sendNext, this);
 }
@@ -170,6 +170,7 @@ void FEC2DParityMultiplexor::preProcessFECPacket(int index, BufferedPacket* srcP
 				if (packetLossPrecededThis || *pCurrentPacketLossInFragmentedFrame) {  //当前这个rtp包是一帧的开始[开始新的一帧了]，若packetLossPrecededThis为true，表示先前有rtp包丢了，那么之前保存的数据全都不要了
 					*fCurrentTo = fCurrentFECBuffer;  //让fCurrentTo指向buffer起始地址
 					*fCurrentFrameSize = 0;
+					*fCurrentMaxSize = MAX_FEC_BUFFER_SIZE;
 				}
 				*pCurrentPacketLossInFragmentedFrame = False;
 			}
@@ -203,7 +204,7 @@ void FEC2DParityMultiplexor::preProcessFECPacket(int index, BufferedPacket* srcP
 			}
 
 
-			if (*pCurrentPacketCompletesFrame && fFrameSize > 0) {
+			if (*pCurrentPacketCompletesFrame && *fCurrentFrameSize > 0) {
 				if (bytesTruncated > 0) {
 					//error! some data will dropped!
 					DebugPrintf("FEC2DParityMultiplexor the total received frame size exceeds the client's buffer size:%d.%d bytes of trailing data will be dropped!\n", (int)MAX_FEC_BUFFER_SIZE, bytesTruncated);
@@ -294,11 +295,11 @@ void FEC2DParityMultiplexor::repairPackets() {
 			//FECDecoder::printCluster(cluster, fRow, fColumn);
 			int absenceNum = cluster->getAbsenceNumber();
 			unsigned repairedPackets = FECDecoder::repairCluster(cluster->rtpPackets(), fRow, fColumn, hostSSRC);   //what if ssrc is not set?
-			DebugPrintf("Cluster %d absence %d packets and repair %u\n\n\n", cluster->base(), absenceNum, repairedPackets);
+			DebugPrintf("Cluster %u absence %d packets and repair %u\n\n\n", (unsigned)cluster->base(), absenceNum, repairedPackets);
 		}
 		else{
 			//进入这里说明：该Cluster收齐了所有的数据包(非冗余包)，无需repair
-			DebugPrintf("Cluster %d no need repair, status: bGetAllRTPPacket is %d, bClusterTimeout is %d\n", cluster->base(), bGetAllRTPPacket, bClusterTimeout);
+			DebugPrintf("Cluster %u no need repair, status: bGetAllRTPPacket is %d, bClusterTimeout is %d\n", (unsigned)cluster->base(), bGetAllRTPPacket, bClusterTimeout);
 		}
 
 		flushCluster(cluster->rtpPackets());  //将Cluster里的数据包(非冗余包)移到fRTPPackets，下面会通知上层来取
