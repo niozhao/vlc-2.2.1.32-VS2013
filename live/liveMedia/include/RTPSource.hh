@@ -135,6 +135,7 @@ private:
 
   RTPReceptionStatsDB* fReceptionStatsDB;
 
+protected:
   //for FEC
   int mRow;
   int mColumn;

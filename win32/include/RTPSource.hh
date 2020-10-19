@@ -135,11 +135,12 @@ private:
 
   RTPReceptionStatsDB* fReceptionStatsDB;
 
+protected:
   //for FEC
   int mRow;
   int mColumn;
   long long mRepairWindow;
-  FECInfo* pFECInfo;
+  FECInfo* pFECInfo;   //will use in MultiFramedRTPSource.cpp
   int mFECInfoCount;
 };
 

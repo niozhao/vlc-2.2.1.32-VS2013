@@ -3,6 +3,7 @@
 
 #include "RTPPacket.hh"
 #include <liveMedia.hh>
+#include <map>
 
 class FECCluster {
 public:
@@ -21,6 +22,8 @@ public:
     long long timestamp() const {return fTimestamp;}
 
     int sourcePacketCount() const {return fRow * fColumn;}
+	long long timeUsed(){ return lastPacketTime - fTimestamp; }
+	std::map<int, long long>& getReceiveTimeMap(){ return receiveTimeMap; }
 
 	~FECCluster();
 
@@ -31,9 +34,12 @@ private:
     RTPPacket** fRTPPackets;
     u_int16_t fBase;
     long long fTimestamp;
+	long long lastPacketTime;
     u_int8_t fRow;
     u_int8_t fColumn;
 	u_int8_t fInterleave;
 	u_int8_t fNonInterleave;
+
+	std::map<int, long long> receiveTimeMap;
 };
 #endif

@@ -320,6 +320,34 @@ void FECDecoder::printCluster(FECCluster* feccluster, unsigned fRow, unsigned fC
 	DebugPrintf("%s", debugString);
 }
 
+char* FECDecoder::getClusterStatus(FECCluster* feccluster, unsigned fRow, unsigned fColumn)
+{
+	RTPPacket**cluster = feccluster->rtpPackets();
+	int size = (fRow + 1) * (fColumn + 1) - 1;
+	const char*  outString = FormatString("printCluster: %u  (%d * %d) time:%lld\n", feccluster->base(), fRow, fColumn, feccluster->timestamp());
+	const int bufferSize = 2048;
+	char* debugString = new char[bufferSize];
+	memset(debugString, 0, bufferSize);
+	strcpy(debugString, outString);
+	delete[] outString;
+	for (int i = 0; i < size; i++) {
+		RTPPacket* curr = cluster[i];
+		if (curr == NULL)
+			strcat(debugString, "NULL      ");
+		else {
+			int payload = EXTRACT_BIT_RANGE(0, 7, curr->content()[1]);
+			u_int16_t seq = (payload == fNonInterleaveFormat || payload == fInterleaveFormat) ? extractFECBase(curr) : extractRTPSeq(curr);
+			const char* tmpStr = FormatString("%d:%u  ", payload, seq);
+			strcat(debugString, tmpStr);
+			delete[] tmpStr;
+		}
+		if ((i + 1) % (fColumn + 1) == 0)
+			strcat(debugString, "\n");
+	}
+	strcat(debugString, "\n");
+	return debugString;
+}
+
 void FECDecoder::printRow(RTPPacket** row, unsigned rowSize) {
     /*for (unsigned i = 0; i < rowSize; i++) {
         RTPPacket* curr = row[i];

@@ -289,7 +289,22 @@ bool MultiFramedRTPSource::checkPRTHeader(BufferedPacket *bPacket)
 
 		// Check the Payload Type.
 		unsigned char rtpPayloadType = (unsigned char)((rtpHdr & 0x007F0000) >> 16);
-		if (rtpPayloadType != rtpPayloadFormat() && rtpPayloadType != 115 && rtpPayloadType != 116)
+		bool bMatch = false;
+		if (rtpPayloadType != rtpPayloadFormat())
+		{
+			for (int i = 0; i < mFECInfoCount; i++)
+			{
+				if (rtpPayloadType == pFECInfo[i].fPayloadFormat)
+				{
+					bMatch = true;
+					break;
+				}
+			}
+		}
+		else
+			bMatch = true;
+
+		if (!bMatch)
 			break;
 
 		// Skip over any CSRC identifiers in the header:

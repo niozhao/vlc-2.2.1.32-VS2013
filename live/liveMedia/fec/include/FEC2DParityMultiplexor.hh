@@ -2,6 +2,7 @@
 #define _FEC_2D_PARITY_MULTIPLEXOR_HH
 
 #include <vector>
+#include <map>
 #include "FECMultiplexor.hh"
 #include "FECPacket.hh"
 #include "FECDecoder.hh"
@@ -28,6 +29,7 @@ public:
 
     std::vector<RTPPacket*> emergencyBuffer;
     std::vector<FECCluster*> superBuffer;
+	std::map<FECCluster *, long long> alreadyHandledClusters;
 
     u_int16_t currentSequenceNumber;
 private:
@@ -36,6 +38,7 @@ private:
 
     void findBase(int* didFind, u_int16_t* newBase);
     FECCluster* findCluster(u_int16_t seqNum);
+	FECCluster* findInAlreadyHandledCluster(u_int16_t seqNum,long long* pTime = NULL);
     void handleEmergencyBuffer(u_int16_t base);
     void flushCluster(RTPPacket** cluster);
 
@@ -52,6 +55,11 @@ private:
 	Boolean processFECHeader(BufferedPacket* packet, Boolean* startFlag, Boolean* endFlag);
 	void resetFECBuffer(int index);
 	void preProcessFECPacket(int index, BufferedPacket* srcPacket);  //true for bInterleave, false for NonInterleave
+
+	//for unnecessaryClusterTimeHistory;
+	long long decreaseRepairwindow();
+	long long increaseRepairwindow();
+	void checkStartStatis();
 
 private:
     long long fRepairWindow;
@@ -72,5 +80,15 @@ private:
 	Boolean currentPacketBeginsFrame[2];
 	Boolean packetLossInFragmentedFrame[2];
 	Boolean currentPacketCompletesFrame[2];
+
+	
+	std::vector<long long> unnecessaryClusterTimeList; //repair window 时间设置过长，保存多去一段时间的历史值。
+	std::map<FECCluster *, long long> notEnoughClusterTimeList;  //repair window 时间设置不够，保存多去一段时间的历史值。
+
+	int repairTimeOKTimes;  //repair window 持续OK的次数
+	long long startCountPoint;   //统计过去几秒，恢复情况
+	float succeedScale;
+	long long repairSucceedCount;
+	long long repairFailedCount;
 };
 #endif

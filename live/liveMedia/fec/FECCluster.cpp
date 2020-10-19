@@ -18,9 +18,8 @@ FECCluster::FECCluster(u_int16_t base, u_int8_t row, u_int8_t column, u_int8_t i
     for (int i = 0; i < size; i++) 
 		fRTPPackets[i] = NULL;
 
-    struct timeval tp;
-	gettimeofday(&tp, NULL);
-	fTimestamp = (long long) tp.tv_sec * 1000L + tp.tv_usec / 1000;
+	fTimestamp = getTime();
+	lastPacketTime = fTimestamp;
 	//DebugPrintf("new Cluster. fBase: %u, fTimestamp:%ld\n", fBase,fTimestamp);
 }
 
@@ -34,6 +33,8 @@ FECCluster::~FECCluster()
 
 void FECCluster::insertPacket(RTPPacket* rtpPacket) {
     int index = getIndex(rtpPacket);
+	lastPacketTime = getTime();
+	receiveTimeMap[index] = lastPacketTime;
     fRTPPackets[index] = rtpPacket;
 }
 

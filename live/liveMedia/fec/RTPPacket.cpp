@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "GroupsockHelper.hh"
 #ifdef WIN32
 #include <Windows.h>
 #elif __ANDROID__
@@ -41,6 +42,13 @@ char const* FormatString(const char* format, ...)
 	return strBuffer;
 }
 
+long long getTime()
+{
+	struct timeval tp;
+	gettimeofday(&tp, NULL);
+	long long timestamp = (long long)tp.tv_sec * 1000L + tp.tv_usec / 1000;
+	return timestamp;
+}
 
 //TODO: Handle extension header?
 RTPPacket* RTPPacket::createNew(unsigned char* rtpPacket, unsigned rtpPacketSize) {

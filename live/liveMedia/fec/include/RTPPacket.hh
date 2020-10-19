@@ -11,6 +11,7 @@
 
 extern void DebugPrintf(const char* format, ...);
 char const* FormatString(const char* format, ...);
+long long getTime();  // in ms
 
 class RTPPacket {
 public:

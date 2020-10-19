@@ -12,6 +12,7 @@ public:
     //static void repairCluster(RTPPacket** cluster, unsigned d, unsigned l, u_int32_t ssrc);
     static unsigned repairCluster(RTPPacket** cluster, unsigned row, unsigned column, unsigned ssrc);
 	static void printCluster(FECCluster* feccluster, unsigned d, unsigned l);
+	static char* getClusterStatus(FECCluster* feccluster, unsigned d, unsigned l);
 
     static u_int16_t extractFECBase(RTPPacket* rtpPacket);
     static u_int16_t extractRTPSeq(RTPPacket* rtpPacket);

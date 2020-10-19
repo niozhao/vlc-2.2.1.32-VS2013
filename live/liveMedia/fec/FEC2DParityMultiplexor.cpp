@@ -6,6 +6,7 @@
 
 #define InterleaveIndex 0
 #define NonInterleaveIndex 1
+#define ArraySize(a) (sizeof(a)/sizeof(a[0]))
 
 FEC2DParityMultiplexor* FEC2DParityMultiplexor::createNew(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow, u_int8_t interleavePayload, u_int8_t nonInterleavePayload) {
 	return new FEC2DParityMultiplexor(env, row, column, repairWindow, interleavePayload, nonInterleavePayload);
@@ -14,7 +15,7 @@ FEC2DParityMultiplexor* FEC2DParityMultiplexor::createNew(UsageEnvironment& env,
 FEC2DParityMultiplexor::FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t row, u_int8_t column, long long repairWindow, u_int8_t interleavePayload, u_int8_t nonInterleavePayload) : FECMultiplexor(env){
     first = True;
     ssrcWasSet = False;
-    fRepairWindow = repairWindow;
+    fRepairWindow = repairWindow;  //the initial value, will change dynamically
     fRow = row;
     fColumn = column;
 	fInterleavePayloadFormat = interleavePayload;
@@ -23,6 +24,11 @@ FEC2DParityMultiplexor::FEC2DParityMultiplexor(UsageEnvironment& env, u_int8_t r
     hostSSRC = 0;
 	reordingBuffers[InterleaveIndex] = NULL;
 	reordingBuffers[NonInterleaveIndex] = NULL;
+	startCountPoint = 0;
+	succeedScale = 0.0f;
+	repairSucceedCount = 0;
+	repairFailedCount = 0;
+	repairTimeOKTimes = 0;
 
 	fFECBuffers[InterleaveIndex] = new unsigned char[MAX_FEC_BUFFER_SIZE];
 	fFECBuffers[NonInterleaveIndex] = new unsigned char[MAX_FEC_BUFFER_SIZE];
@@ -77,10 +83,18 @@ FEC2DParityMultiplexor::~FEC2DParityMultiplexor() {
 		fRTPPackets.pop();
 		delete rtpPacket;
 	}
-	/*for (size_t i = 0; i < emergencyBuffer.size(); i++){
+	for (size_t i = 0; i < emergencyBuffer.size(); i++){
 		delete emergencyBuffer[i];
 	}
-	emergencyBuffer.clear();*/
+	emergencyBuffer.clear();
+
+	for (int i = 0; i < superBuffer.size(); i++)
+		delete superBuffer[i];
+	superBuffer.clear();
+	std::map<FECCluster *, long long>::iterator it = alreadyHandledClusters.begin();
+	for (; it != alreadyHandledClusters.end(); it++)
+		delete it->first;
+	alreadyHandledClusters.clear();
 }
 
 Boolean FEC2DParityMultiplexor::processFECHeader(BufferedPacket* packet, Boolean* startFlag, Boolean* endFlag)
@@ -222,6 +236,61 @@ void FEC2DParityMultiplexor::preProcessFECPacket(int index, BufferedPacket* srcP
 	}
 }
 
+long long FEC2DParityMultiplexor::increaseRepairwindow()
+{
+	if (notEnoughClusterTimeList.size() <= 2)
+		return 0;
+	//array is full, already cache all history, calculator RepairWindow time
+	//去掉数组中极值
+	long long sum = 0;
+	long long biggest, smallest;
+	biggest = 0;
+	smallest = 1000000;
+	std::map<FECCluster *, long long>::iterator it = notEnoughClusterTimeList.begin();
+	for (; it != notEnoughClusterTimeList.end(); it++)
+	{
+		int value = it->second;
+		if (value > biggest)
+			biggest = value;
+
+		if (value < smallest)
+			smallest = value;
+
+		sum += value;
+	}
+
+	sum = sum - biggest - smallest;
+	long long average = sum / (notEnoughClusterTimeList.size() - 2);
+
+	return average;
+}
+
+long long FEC2DParityMultiplexor::decreaseRepairwindow()
+{
+	if (unnecessaryClusterTimeList.size() <= 2)
+		return 0;
+	//array is full, already cache all history, calculator RepairWindow time
+	//去掉数组中极值
+	long long sum = 0;
+	long long biggest, smallest;
+	biggest = 0;
+	smallest = 1000000;
+	for (int i = 0; i < unnecessaryClusterTimeList.size(); i++)
+	{
+		long long value = unnecessaryClusterTimeList[i];
+		if (value > biggest)
+			biggest = value;
+					
+		if (value < smallest)
+			smallest = value;
+				
+		sum += value;
+	}
+	sum = sum - biggest - smallest;
+	long long average = sum / (unnecessaryClusterTimeList.size() - 2);
+	return average;
+}
+
 void FEC2DParityMultiplexor::pushFECRTPPacket(BufferedPacket* srcPacket)
 {
 	int payload = EXTRACT_BIT_RANGE(0, 7, srcPacket->data()[1]);
@@ -273,43 +342,134 @@ void FEC2DParityMultiplexor::pushFECRTPPacket(unsigned char* buffer, unsigned bu
 	}
 }
 
+void FEC2DParityMultiplexor::checkStartStatis()
+{
+	const int CONTINUS_OK_TIME = 30 * 1000;
+	const int WATCH_TIME_DURATION = 3 * 1000;
+	int times = CONTINUS_OK_TIME / WATCH_TIME_DURATION;
+	long long now = getTime();
+	if (now - startCountPoint > WATCH_TIME_DURATION)
+	{
+		startCountPoint = now;
+		if (repairSucceedCount + repairFailedCount != 0)
+		{
+			succeedScale = repairSucceedCount * 1.0 / (repairSucceedCount + repairFailedCount);
+			if (succeedScale >= 0.99f)
+			{
+				repairTimeOKTimes++;
+				if (repairTimeOKTimes >= times)
+				{
+					repairTimeOKTimes = 0;
+					//持续一段时间，再尝试减少repair window
+					long long offset = decreaseRepairwindow();
+					long long theOld = fRepairWindow;
+					fRepairWindow -= 20;
+					DebugPrintf("decrease repair window: %lld ==> %lld, offset = %lld, succeedScale:%f, repairSucceedCount:%lld, repairFailedCount:%lld \n", theOld, fRepairWindow, offset, succeedScale, repairSucceedCount, repairFailedCount);
+				}
+			}
+			else
+			{
+				long long theOld = fRepairWindow;
+				long long offset = increaseRepairwindow();
+				fRepairWindow += offset;
+				DebugPrintf("increase repair window: %lld ==> %lld, average = %lld, succeedScale:%f, repairSucceedCount:%lld, repairFailedCount:%lld \n", theOld, fRepairWindow, offset, succeedScale, repairSucceedCount, repairFailedCount);
+				repairTimeOKTimes = 0;
+			}
+				
+		}
+		unnecessaryClusterTimeList.clear();
+		notEnoughClusterTimeList.clear();
+		repairSucceedCount = 0;
+		repairFailedCount = 0;
+	}
+}
 void FEC2DParityMultiplexor::sendNext(void* firstArg) {
 	FEC2DParityMultiplexor* fec2DParityMultiplexor = (FEC2DParityMultiplexor*)firstArg;
 	fec2DParityMultiplexor->repairPackets();
 }
 
+/***************************
+ *  动态调整 fRepairWindow 时间
+ *
+ *1：若持续一段时间都repair了所有丢失的包[或者根本没丢包]，则应减少【减少多少？】。
+ *
+ *2：若多去3秒修复率低于99%，并且有的包到达FEC模块后，未找到对应的Cluster，说明fRepairWindow时间短了，尝试增加。
+ *
+***************************/
 void FEC2DParityMultiplexor::repairPackets() {
     Boolean packetsAreAvailable = False;
     int clustersToErase = 0;
 	
+	checkStartStatis();
+
 	for (int i = 0; i < superBuffer.size(); i++) {
 		FECCluster* cluster = superBuffer.at(i);
 		bool bGetAllRTPPacket = cluster->allRTPPacketsArePresent();
 		bool bClusterTimeout = cluster->hasExpired(fRepairWindow);
+
+		bool bTryAddWindowTime = false;
+		bool bTryReduceWindowTime = false;
 
 		if (!bGetAllRTPPacket && !bClusterTimeout)
 			break;  //进入break说明：该Cluster还未收齐数据包(非冗余包) 并且该Cluster未超时
 
 		if (!bGetAllRTPPacket && bClusterTimeout) {
 			//进入这里说明：该Cluster还未收齐数据包(非冗余包) 但 该Cluster已经超时了，尝试用冗余包把缺失的数据包恢复
-			//FECDecoder::printCluster(cluster, fRow, fColumn);
+			//char* debufInfo = FECDecoder::getClusterStatus(cluster, fRow, fColumn);
 			int absenceNum = cluster->getAbsenceNumber();
 			unsigned repairedPackets = FECDecoder::repairCluster(cluster->rtpPackets(), fRow, fColumn, hostSSRC);   //what if ssrc is not set?
-			DebugPrintf("Cluster %u absence %d packets and repair %u\n\n\n", (unsigned)cluster->base(), absenceNum, repairedPackets);
+			if (absenceNum != repairedPackets){
+				bTryAddWindowTime = true;
+				//DebugPrintf("%s", debufInfo);
+				DebugPrintf("Cluster %u absence %d packets and repair %u\n\n\n", (unsigned)cluster->base(), absenceNum, repairedPackets);
+				//有一次未repair所有丢失的包，两种情况：
+				//1: 丢的包太多了，2D校验算法没法修复。
+				//2：repair设置时间短了，有部分包未收到就超时了，可以通过增加时间解决。这种情况在insertPacket中处理。
+			}
+			else
+			{
+				//成功repair了所有丢失的包
+				bTryReduceWindowTime = true;
+			}
+			//delete[] debufInfo;
 		}
 		else{
 			//进入这里说明：该Cluster收齐了所有的数据包(非冗余包)，无需repair
-			DebugPrintf("Cluster %u no need repair, status: bGetAllRTPPacket is %d, bClusterTimeout is %d\n", (unsigned)cluster->base(), bGetAllRTPPacket, bClusterTimeout);
+			bTryReduceWindowTime = true;
 		}
 
 		flushCluster(cluster->rtpPackets());  //将Cluster里的数据包(非冗余包)移到fRTPPackets，下面会通知上层来取
 		clustersToErase++;
 		packetsAreAvailable = True;
+
+		if (bTryReduceWindowTime)
+		{
+			repairSucceedCount++;
+			long long unnecessaryTime = fRepairWindow - cluster->timeUsed();
+			unnecessaryClusterTimeList.push_back(unnecessaryTime);
+		}
+		if (bTryAddWindowTime)
+			repairFailedCount++;
 	}
 
+	long long now = getTime();
+
+	std::map<FECCluster *, long long>::iterator it = alreadyHandledClusters.begin();
+	for (; it != alreadyHandledClusters.end();)
+	{
+		if (now - it->second > 5 * 1000)  //缓存5秒时间已到
+		{
+			delete it->first;
+			it = alreadyHandledClusters.erase(it);
+		}
+		else
+			it++;
+	}
+		
     if (clustersToErase > 0) {
-		for (int i = 0; i < clustersToErase; i++)
-			delete superBuffer[i];
+		for (int i = 0; i < clustersToErase; i++){
+			alreadyHandledClusters[superBuffer[i]] = now;  //缓存5秒再 release 该 cluster
+		}
         superBuffer.erase( superBuffer.begin(), (superBuffer.begin() + clustersToErase)); 
     }
 
@@ -377,7 +537,16 @@ bool FEC2DParityMultiplexor::insertPacket(RTPPacket* rtpPacket)
 			}
 			else 
 			{
-				//DebugPrintf("receive %d, seq: %u, but not find cluster\n", payload, seq);
+				long long clusterHandledTime = 0;
+				fecCluster = findInAlreadyHandledCluster(seq, &clusterHandledTime);
+				if (fecCluster){
+					long long laterTime = getTime() - clusterHandledTime;
+					notEnoughClusterTimeList[fecCluster] = laterTime;
+					//DebugPrintf("receive %d, seq: %u, not find in cluster, but find in handled cluster, this packet later:%lld:\n", payload, seq, laterTime);
+				}
+					
+				else
+					DebugPrintf("receive %d, seq: %u, not find in cluster and not find in handled cluster\n", payload, seq);
 				bRes = false;
 			}
 		}
@@ -385,7 +554,7 @@ bool FEC2DParityMultiplexor::insertPacket(RTPPacket* rtpPacket)
     else
     {
 		/*Special case*/
-		DebugPrintf("into special case , u_int16_t overflow!");
+		DebugPrintf("into special case , u_int16_t overflow! payload:%d, newSeq:%u, currentSequenceNumber:%u \n", payload, newSeq, currentSequenceNumber);
 		if (seq >= currentSequenceNumber || seq < newSeq)
 		{
 			//Find cluster
@@ -393,13 +562,18 @@ bool FEC2DParityMultiplexor::insertPacket(RTPPacket* rtpPacket)
 			if (fecCluster != NULL)
 				fecCluster->insertPacket(rtpPacket);
 			else
+			{
 				bRes = false;
+			}
+				
 		}
 		else
 		{
 			u_int16_t diff = seq - currentSequenceNumber;
 			if (diff > 30000)
+			{
 				bRes = false;
+			}
 			else
 			{
 				updateCurrentSequenceNumber(seq, sourcePacketCount);
@@ -422,6 +596,7 @@ void FEC2DParityMultiplexor::handleEmergencyBuffer(u_int16_t base) {
 	Boolean thereWasReadyRTPPackets = False;
 	superBuffer.push_back(fecCluster);
 
+	DebugPrintf("handleEmergencyBuffer, size: %u\n", emergencyBuffer.size());
 	for (int i = emergencyBuffer.size() - 1; i >= 0; i--) {
 		RTPPacket* current = emergencyBuffer.at(i);
 
@@ -491,6 +666,20 @@ FECCluster* FEC2DParityMultiplexor::findCluster(u_int16_t seqNum) {
 	for (int i = 0; i < superBuffer.size(); i++) {
 		if (superBuffer.at(i)->seqNumInCluster(seqNum)) {
 			return superBuffer.at(i);
+		}
+	}
+	return NULL;
+}
+
+FECCluster* FEC2DParityMultiplexor::findInAlreadyHandledCluster(u_int16_t seqNum, long long* pTime/* = NULL*/)
+{
+	std::map<FECCluster *, long long>::iterator it = alreadyHandledClusters.begin();
+	for (; it != alreadyHandledClusters.end();it++)
+	{
+		if (it->first->seqNumInCluster(seqNum)) {
+			if (pTime)
+				*pTime = it->second;
+			return it->first;
 		}
 	}
 	return NULL;
