@@ -234,8 +234,8 @@ public:
   char const* fmtp_spropvps() const { return attrVal_str("sprop-vps"); }
   char const* fmtp_spropsps() const { return attrVal_str("sprop-sps"); }
   char const* fmtp_sproppps() const { return attrVal_str("sprop-pps"); }
-  char const* fmtp_fec_row() const { return attrVal_str("l"); }   //the key is lowercase
-  char const* fmtp_fec_column() const { return attrVal_str("d"); }
+  char const* fmtp_fec_row() const { return attrVal_str("d"); }   //the key is lowercase
+  char const* fmtp_fec_column() const { return attrVal_str("l"); }
   char const* fmtp_fec_repairwindow() const { return attrVal_str("repair-window"); }  //micro-second
 
   netAddressBits connectionEndpointAddress() const;
