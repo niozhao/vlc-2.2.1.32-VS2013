@@ -780,7 +780,8 @@ static int SessionsSetup( demux_t *p_demux )
 
                 /* Increase the RTP reorder timebuffer just a bit */
 				unsigned fecRepairWindowTime = (unsigned)sub->rtpSource()->getFECRepairWindowTime();
-				unsigned threshTime = fecRepairWindowTime >= thresh ? (fecRepairWindowTime + 50 * 1000) : thresh;
+				//unsigned threshTime = fecRepairWindowTime >= thresh ? (fecRepairWindowTime + 50 * 1000) : thresh;
+				unsigned threshTime = fecRepairWindowTime > 0 ? 10 * 1000 : thresh;  //enable fec, no need reordering threshold time!
 				sub->rtpSource()->setPacketReorderingThresholdTime(threshTime);
             }
             msg_Dbg( p_demux, "RTP subsession '%s/%s'", sub->mediumName(),

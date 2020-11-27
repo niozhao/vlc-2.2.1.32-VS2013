@@ -238,14 +238,13 @@ void FEC2DParityMultiplexor::preProcessFECPacket(int index, BufferedPacket* srcP
 
 long long FEC2DParityMultiplexor::increaseRepairwindow()
 {
-	if (notEnoughClusterTimeList.size() <= 2)
+	if (notEnoughClusterTimeList.size() <= 0)
 		return 0;
-	//array is full, already cache all history, calculator RepairWindow time
 	//去掉数组中极值
 	long long sum = 0;
 	long long biggest, smallest;
 	biggest = 0;
-	smallest = 1000000;
+	smallest = 10000000;
 	std::map<FECCluster *, long long>::iterator it = notEnoughClusterTimeList.begin();
 	for (; it != notEnoughClusterTimeList.end(); it++)
 	{
@@ -259,10 +258,11 @@ long long FEC2DParityMultiplexor::increaseRepairwindow()
 		sum += value;
 	}
 
-	sum = sum - biggest - smallest;
-	long long average = sum / (notEnoughClusterTimeList.size() - 2);
-
-	return average;
+	int average = sum / notEnoughClusterTimeList.size();
+	if (biggest - average > 300)
+		return (sum - biggest) / (notEnoughClusterTimeList.size() - 1);  //the biggest value is abnormal, drop it
+	else
+		return biggest;  //can quick adjust repair window!
 }
 
 long long FEC2DParityMultiplexor::decreaseRepairwindow()
@@ -344,7 +344,7 @@ void FEC2DParityMultiplexor::pushFECRTPPacket(unsigned char* buffer, unsigned bu
 
 void FEC2DParityMultiplexor::checkStartStatis()
 {
-	const int CONTINUS_OK_TIME = 30 * 1000;
+	const int CONTINUS_OK_TIME = 12 * 1000;
 	const int WATCH_TIME_DURATION = 3 * 1000;
 	int times = CONTINUS_OK_TIME / WATCH_TIME_DURATION;
 	long long now = getTime();
