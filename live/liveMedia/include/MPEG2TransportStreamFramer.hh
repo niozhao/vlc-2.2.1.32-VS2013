@@ -70,9 +70,9 @@ private:
   HashTable* fPIDStatusTable;
   u_int64_t fTSPCRCount;
   Boolean fLimitNumTSPacketsToStream;
-  unsigned long fNumTSPacketsToStream; // used iff "fLimitNumTSPacketsToStream" is True
+  unsigned long fNumTSPacketsToStream; // used if "fLimitNumTSPacketsToStream" is True
   Boolean fLimitTSPacketsToStreamByPCR;
-  float fPCRLimit; // used iff "fLimitTSPacketsToStreamByPCR" is True
+  float fPCRLimit; // used if "fLimitTSPacketsToStreamByPCR" is True
 };
 
 #endif

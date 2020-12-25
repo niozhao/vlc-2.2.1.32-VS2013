@@ -202,23 +202,33 @@ Boolean MPEG2TransportStreamFramer::updateTSPacketDurationEstimate(unsigned char
   ++fTSPacketCount;
 
   // If this packet doesn't contain a PCR, then we're not interested in it:
+
+  //adaptation_field_control（适配域控制）：
+  //表示包头是否有调整字段或有效负载。
+  //‘00’为ISO / IEC未来使用保留；
+  //‘01’仅含有效载荷，无调整字段；
+  //‘10’ 无有效载荷，仅含调整字段；
+  //‘11’ 调整字段后为有效载荷，调整字段中的前一个字节表示调整字段的长度length，有效载荷开始的位置应再偏移[length]个字节
+
   u_int8_t const adaptation_field_control = (pkt[3]&0x30)>>4;
   if (adaptation_field_control != 2 && adaptation_field_control != 3) return True;
       // there's no adaptation_field
 
-  u_int8_t const adaptation_field_length = pkt[4];
+  bool payload_unit_start_indicator = pkt[1] & 0x40;  //应当为1。为1时，在前4个字节之后会有一个调整字节，其的数值为后面调整字段的长度length。adaptation_field_control也包含了这个信息
+  u_int8_t const adaptation_field_length = pkt[4];  //第5个字节：后面还有多少字节的调整字节，填充的是oxff。
   if (adaptation_field_length == 0) return True;
 
-  u_int8_t const discontinuity_indicator = pkt[5]&0x80;
+  //官方文档 PDF 40页
+  u_int8_t const discontinuity_indicator = pkt[5]&0x80;  //第6个字节
   u_int8_t const pcrFlag = pkt[5]&0x10;
-  if (pcrFlag == 0) return True; // no PCR
+  if (pcrFlag == 0) return True; // no PCR，if true indicates that the adaptation_field contains a PCR field coded in two parts
 
   // There's a PCR.  Get it, and the PID:
   ++fTSPCRCount;
-  u_int32_t pcrBaseHigh = (pkt[6]<<24)|(pkt[7]<<16)|(pkt[8]<<8)|pkt[9];
+  u_int32_t pcrBaseHigh = (pkt[6]<<24)|(pkt[7]<<16)|(pkt[8]<<8)|pkt[9];  //取7,8,9,10四个字节，32个bit    【program_clock_reference_base 33个bit】
   double clock = pcrBaseHigh/45000.0;
-  if ((pkt[10]&0x80) != 0) clock += 1/90000.0; // add in low-bit (if set)
-  unsigned short pcrExt = ((pkt[10]&0x01)<<8) | pkt[11];
+  if ((pkt[10]&0x80) != 0) clock += 1/90000.0; // add in low-bit (if set)                   //between program_clock_reference_base && program_clock_reference_extension there are reserved 6 bit 
+  unsigned short pcrExt = ((pkt[10] & 0x01) << 8) | pkt[11];    //[program_clock_reference_extension: 占9位]   33 + 6 + 9
   clock += pcrExt/27000000.0;
   if (fLimitTSPacketsToStreamByPCR) {
     if (clock > fPCRLimit) {
@@ -227,7 +237,7 @@ Boolean MPEG2TransportStreamFramer::updateTSPacketDurationEstimate(unsigned char
     }
   }
 
-  unsigned pid = ((pkt[1]&0x1F)<<8) | pkt[2];
+  unsigned pid = ((pkt[1]&0x1F)<<8) | pkt[2];  //pdf 36页
 
   // Check whether we already have a record of a PCR for this PID:
   PIDStatus* pidStatus = (PIDStatus*)(fPIDStatusTable->Lookup((char*)pid));
@@ -258,24 +268,24 @@ Boolean MPEG2TransportStreamFramer::updateTSPacketDurationEstimate(unsigned char
     if (fTSPacketDurationEstimate == 0.0) { // we've just started
       fTSPacketDurationEstimate = durationPerPacket;
     } else if (discontinuity_indicator == 0 && durationPerPacket >= 0.0) {
-      fTSPacketDurationEstimate
-	= durationPerPacket*NEW_DURATION_WEIGHT
-	+ fTSPacketDurationEstimate*(1-NEW_DURATION_WEIGHT);
+        fTSPacketDurationEstimate
+	      = durationPerPacket*NEW_DURATION_WEIGHT
+	      + fTSPacketDurationEstimate*(1-NEW_DURATION_WEIGHT);
 
-      // Also adjust the duration estimate to try to ensure that the transmission
-      // rate matches the playout rate:
-      double transmitDuration = timeNow - pidStatus->firstRealTime;
-      double playoutDuration = clock - pidStatus->firstClock;
-      if (transmitDuration > playoutDuration) {
-	fTSPacketDurationEstimate *= TIME_ADJUSTMENT_FACTOR; // reduce estimate
-      } else if (transmitDuration + MAX_PLAYOUT_BUFFER_DURATION < playoutDuration) {
-	fTSPacketDurationEstimate /= TIME_ADJUSTMENT_FACTOR; // increase estimate
-      }
+        // Also adjust the duration estimate to try to ensure that the transmission
+        // rate matches the playout rate:
+        double transmitDuration = timeNow - pidStatus->firstRealTime;
+        double playoutDuration = clock - pidStatus->firstClock;
+        if (transmitDuration > playoutDuration) {
+	       fTSPacketDurationEstimate *= TIME_ADJUSTMENT_FACTOR; // reduce estimate
+        } else if (transmitDuration + MAX_PLAYOUT_BUFFER_DURATION < playoutDuration) {
+	       fTSPacketDurationEstimate /= TIME_ADJUSTMENT_FACTOR; // increase estimate
+        }
     } else {
-      // the PCR has a discontinuity from its previous value; don't use it now,
-      // but reset our PCR and real-time values to compensate:
-      pidStatus->firstClock = clock;
-      pidStatus->firstRealTime = timeNow;
+        // the PCR has a discontinuity from its previous value; don't use it now,
+        // but reset our PCR and real-time values to compensate:
+        pidStatus->firstClock = clock;
+        pidStatus->firstRealTime = timeNow;
     }
 #ifdef DEBUG_PCR
     fprintf(stderr, "PID 0x%x, PCR 0x%08x+%d:%03x == %f @ %f (diffs %f @ %f), pkt #%lu, discon %d => this duration %f, new estimate %f, mean PCR period=%f\n", pid, pcrBaseHigh, pkt[10]>>7, pcrExt, clock, timeNow, clock - pidStatus->firstClock, timeNow - pidStatus->firstRealTime, fTSPacketCount, discontinuity_indicator != 0, durationPerPacket, fTSPacketDurationEstimate, meanPCRPeriod );
