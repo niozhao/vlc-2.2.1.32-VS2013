@@ -1862,8 +1862,8 @@ static void StreamRead( void *p_private, unsigned int i_size,
 	struct timeval timeNow;
 	gettimeofday(&timeNow, NULL);
 	int64_t nowLong = (int64_t)timeNow.tv_sec * INT64_C(1000000) + (int64_t)timeNow.tv_usec;
-	static int64_t begin_time = nowLong;
-	if (nowLong - begin_time >= 5 * INT64_C(1000000))
+	static int64_t begin_time = 0;
+	if (nowLong - begin_time >= 30 * INT64_C(1000000))
 	{
 		begin_time = nowLong;
 		//每隔一段时间检查下socket receive buffer大小，因为播放组播rtsp时，若本机就是组播服务器则会出现buffer大小很小0或者2K，
@@ -1892,17 +1892,9 @@ static void StreamRead( void *p_private, unsigned int i_size,
 			{
 				int fd = sub->rtpSource()->RTPgs()->socketNum();
 				unsigned result = 0;
-				result = getReceiveBufferSize(*p_sys->env, fd);
-
-				//msg_Info(p_demux, "streamread getReceiveBufferSize %s result:%u ", sub->mediumName(), result);
-
-				if (result < 50 * 1024)
-				{
-					/* Increase the buffer size */
-					unsigned res = 0;
-					res = increaseReceiveBufferTo(*p_sys->env, fd, i_receive_buffer);
-					//msg_Info(p_demux, "streamread increaseReceiveBufferTo %u, result:%u, info:%s", i_receive_buffer, res, buffer);
-				}
+				unsigned res = 0;
+				res = increaseReceiveBufferTo(*p_sys->env, fd, i_receive_buffer);
+				//msg_Info(p_demux, "streamread increaseReceiveBufferTo %u, result:%u, info:%s", i_receive_buffer, res, buffer);
 			}
 		}
 	}
