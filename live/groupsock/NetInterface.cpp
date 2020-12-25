@@ -101,8 +101,16 @@ Socket::~Socket() {
 
 Boolean Socket::changePort(Port newPort) {
   int oldSocketNum = fSocketNum;
-  unsigned oldReceiveBufferSize = getReceiveBufferSize(fEnv, fSocketNum);
+  unsigned receiveBufferSize = 2000000;  //default value come from live555.cpp for video!
+  unsigned sendBufferSize = 50 * 1024;  //default value come from RTPInterface.cpp
+
+  unsigned oldReceiveBufferSize = getReceiveBufferSize(fEnv, fSocketNum);  //if fSocketNum is INVALID_SOCKET, the result is 0
   unsigned oldSendBufferSize = getSendBufferSize(fEnv, fSocketNum);
+
+  if (oldReceiveBufferSize > receiveBufferSize)
+	  receiveBufferSize = oldReceiveBufferSize;
+  if (oldSendBufferSize > sendBufferSize)
+	  sendBufferSize = oldSendBufferSize;
   closeSocket(fSocketNum);
 
   fSocketNum = setupDatagramSocket(fEnv, newPort);
@@ -111,8 +119,8 @@ Boolean Socket::changePort(Port newPort) {
     return False;
   }
 
-  setReceiveBufferTo(fEnv, fSocketNum, oldReceiveBufferSize);
-  setSendBufferTo(fEnv, fSocketNum, oldSendBufferSize);
+  setReceiveBufferTo(fEnv, fSocketNum, receiveBufferSize);
+  setSendBufferTo(fEnv, fSocketNum, sendBufferSize);
   if (fSocketNum != oldSocketNum) { // the socket number has changed, so move any event handling for it:
     fEnv.taskScheduler().moveSocketHandling(oldSocketNum, fSocketNum);
   }

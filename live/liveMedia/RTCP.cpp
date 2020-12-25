@@ -159,16 +159,7 @@ RTCPInstance::RTCPInstance(UsageEnvironment& env, Groupsock* RTCPgs,
   fOutBuf = new OutPacketBuffer(preferredRTCPPacketSize, maxRTCPPacketSize, maxRTCPPacketSize);
   if (fOutBuf == NULL) return;
 
-  if (fSource != NULL && fSource->RTPgs() == RTCPgs) {
-    // We're receiving RTCP reports that are multiplexed with RTP, so ask the RTP source
-    // to give them to us:
-    fSource->registerForMultiplexedRTCPPackets(this);
-  } else {
-    // Arrange to handle incoming reports from the network:
-    TaskScheduler::BackgroundHandlerProc* handler
-      = (TaskScheduler::BackgroundHandlerProc*)&incomingReportHandler;
-    fRTCPInterface.startNetworkReading(handler);
-  }
+  startNetworkReading();
 
   // Send our first report.
   fTypeOfEvent = EVENT_REPORT;
@@ -179,6 +170,20 @@ struct RRHandlerRecord {
   TaskFunc* rrHandlerTask;
   void* rrHandlerClientData;
 };
+
+void RTCPInstance::startNetworkReading()
+{
+	if (fSource != NULL && fSource->RTPgs() == fRTCPInterface.gs()) {
+		// We're receiving RTCP reports that are multiplexed with RTP, so ask the RTP source
+		// to give them to us:
+		fSource->registerForMultiplexedRTCPPackets(this);
+	} else {
+		// Arrange to handle incoming reports from the network:
+		TaskScheduler::BackgroundHandlerProc* handler
+			= (TaskScheduler::BackgroundHandlerProc*)&incomingReportHandler;
+		fRTCPInterface.startNetworkReading(handler);
+	}
+}
 
 RTCPInstance::~RTCPInstance() {
 #ifdef DEBUG

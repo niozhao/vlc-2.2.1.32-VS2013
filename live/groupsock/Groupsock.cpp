@@ -104,6 +104,13 @@ Groupsock::Groupsock(UsageEnvironment& env, struct in_addr const& groupAddr,
     fDests(new destRecord(groupAddr, port, ttl, 0, NULL)),
     fIncomingGroupEId(groupAddr, port.num(), ttl) {
 
+	if (socketNum() < 0){
+		if (DebugLevel >= 1) {
+			env << *this << ": failed to create socket: "
+				<< env.getResultMsg() << "\n";
+		}
+	}
+
   if (!socketJoinGroup(env, socketNum(), groupAddr.s_addr)) {
     if (DebugLevel >= 1) {
       env << *this << ": failed to join group: "
@@ -201,9 +208,20 @@ Groupsock::changeDestinationParameters(struct in_addr const& newDestAddr,
     if (newDestPort.num() != destPortNum
 	&& IsMulticastAddress(destAddr.s_addr)) {
       // Also bind to the new port number:
-      changePort(newDestPort);
+      Boolean bRes = changePort(newDestPort);
+	  if (!bRes){
+		  if (DebugLevel >= 1) {
+			  env() << *this << ": failed changePort: "
+				  << env().getResultMsg() << "\n";
+		  }
+	  }
       // And rejoin the multicast group:
-      socketJoinGroup(env(), socketNum(), destAddr.s_addr);
+	  if (!socketJoinGroup(env(), socketNum(), destAddr.s_addr)){
+		  if (DebugLevel >= 1) {
+			  env() << *this << ": failed to join group in changeDestinationParameters: "
+				  << env().getResultMsg() << "\n";
+		  }
+	  }
     }
     destPortNum = newDestPort.num();
   }

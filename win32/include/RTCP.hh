@@ -114,6 +114,8 @@ public:
   void injectReport(u_int8_t const* packet, unsigned packetSize, struct sockaddr_in const& fromAddress);
     // Allows an outside party to inject an RTCP report (from other than the network interface)
 
+  void startNetworkReading();
+
 protected:
   RTCPInstance(UsageEnvironment& env, Groupsock* RTPgs, unsigned totSessionBW,
 	       unsigned char const* cname,

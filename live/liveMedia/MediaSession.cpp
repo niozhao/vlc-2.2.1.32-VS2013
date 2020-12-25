@@ -934,7 +934,10 @@ void MediaSubsession::setDestinations(netAddressBits defaultDestAddress) {
   if (fRTCPSocket != NULL && !isSSM() && !fMultiplexRTCPWithRTP) {
     // Note: For SSM sessions, the dest address for RTCP was already set.
     Port destPort(serverPortNum+1);
+	int oldSocket = fRTCPSocket->socketNum();
     fRTCPSocket->changeDestinationParameters(destAddr, destPort, destTTL);
+	if (oldSocket == -1 /*INVALID_SOCKET*/)
+		fRTCPInstance->startNetworkReading();  //register the socket readable event, the previous call in RTCPInstance Construct not take effect because of the invalid socket!
   }
 }
 
